@@ -370,19 +370,26 @@ int get_pkg_from_apk_path(char *pkg, const char *path)
     return 0;
 }
 
-bool is_manager_apk(char *path)
+/*
+ * is_manager_apk - Check if the APK at path is the manager.
+ * @path: filesystem path to the APK
+ *
+ * Returns: 1 if this is the manager APK, 0 if definitely not,
+ *          -1 on error (file unreadable, could not determine).
+ */
+int is_manager_apk(char *path)
 {
 #ifdef KSU_MANAGER_PACKAGE
     char pkg[KSU_MAX_PACKAGE_NAME];
     if (get_pkg_from_apk_path(pkg, path) < 0) {
         pr_err("Failed to get package name from apk path: %s\n", path);
-        return false;
+        return -1;
     }
 
     // pkg is `<real package>`
     if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {
-        return false;
+        return 0;
     }
 #endif
-    return check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH);
+    return check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH) ? 1 : 0;
 }

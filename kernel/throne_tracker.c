@@ -80,7 +80,7 @@ struct my_dir_context {
 #define FILLDIR_ACTOR_CONTINUE 0
 #define FILLDIR_ACTOR_STOP -EINVAL
 #endif
-extern bool is_manager_apk(char *path);
+extern int is_manager_apk(char *path);
 FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
                              int namelen, loff_t off, u64 ino,
                              unsigned int d_type)
@@ -136,10 +136,10 @@ FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
                 }
             }
 
-            bool is_manager = is_manager_apk(dirpath);
+            int is_manager = is_manager_apk(dirpath);
             pr_info("Found new base.apk at path: %s, is_manager: %d\n", dirpath,
                     is_manager);
-            if (is_manager) {
+            if (is_manager == 1) {
                 crown_manager(dirpath, my_ctx->private_data);
                 *my_ctx->stop = 1;
 
@@ -148,7 +148,8 @@ FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
                     list_del(&pos->list);
                     kfree(pos);
                 }
-            } else {
+            } else if (is_manager == 0) {
+                // Definitely not manager — cache path to skip next time
                 struct apk_path_hash *apk_data =
                     kzalloc(sizeof(struct apk_path_hash), GFP_ATOMIC);
                 if (!apk_data) {
@@ -159,6 +160,7 @@ FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
                 apk_data->exists = true;
                 list_add_tail(&apk_data->list, &apk_path_hash_list);
             }
+            // is_manager < 0: error reading APK, don't cache — retry next time
         }
     }
 
