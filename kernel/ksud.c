@@ -65,12 +65,11 @@ static struct work_struct stop_input_hook_work;
 
 void on_post_fs_data(void)
 {
-    static bool done = false;
-    if (done) {
+    static atomic_t done = ATOMIC_INIT(0);
+    if (atomic_cmpxchg(&done, 0, 1) != 0) {
         pr_info("on_post_fs_data already done\n");
         return;
     }
-    done = true;
     pr_info("on_post_fs_data!\n");
 
     ksu_load_allow_list();
@@ -239,7 +238,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 
     /* This applies to versions Android 10+ */
     static const char system_bin_init[] = "/system/bin/init";
-    static bool init_second_stage_executed = false;
+    static atomic_t init_second_stage_done = ATOMIC_INIT(0);
 
     if (!filename_ptr)
         return 0;
@@ -254,13 +253,13 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
                          sizeof(system_bin_init) - 1) &&
                  argv)) {
         char buf[16];
-        if (!init_second_stage_executed &&
+        if (atomic_read(&init_second_stage_done) == 0 &&
             check_argv(*argv, 1, "second_stage", buf, sizeof(buf))) {
             pr_info("/system/bin/init second_stage executed\n");
             apply_kernelsu_rules();
             cache_sid();
             setup_ksu_cred();
-            init_second_stage_executed = true;
+            atomic_set(&init_second_stage_done, 1);
         }
     }
 
@@ -271,7 +270,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
         char buf[16];
         if (check_argv(*argv, 1, "-Xzygote", buf, sizeof(buf))) {
             pr_info("exec zygote, /data prepared, second_stage: %d\n",
-                    init_second_stage_executed);
+                    atomic_read(&init_second_stage_done));
             rcu_read_lock();
             struct task_struct *init_task =
                 rcu_dereference(current->real_parent);
@@ -412,13 +411,12 @@ static void ksu_handle_sys_read(unsigned int fd)
     }
 
     // we only process the first read
-    static bool rc_hooked = false;
-    if (rc_hooked) {
+    static atomic_t rc_hooked = ATOMIC_INIT(0);
+    if (atomic_cmpxchg(&rc_hooked, 0, 1) != 0) {
         // we don't need these kprobe, unregister it!
         stop_init_rc_hook();
         goto skip;
     }
-    rc_hooked = true;
 
     // now we can sure that the init process is reading
     // `/system/etc/init/init.rc`
@@ -642,11 +640,10 @@ static void stop_execve_hook()
 
 static void stop_input_hook()
 {
-    static bool input_hook_stopped = false;
-    if (input_hook_stopped) {
+    static atomic_t input_hook_stopped = ATOMIC_INIT(0);
+    if (atomic_cmpxchg(&input_hook_stopped, 0, 1) != 0) {
         return;
     }
-    input_hook_stopped = true;
     bool ret = schedule_work(&stop_input_hook_work);
     pr_info("unregister input kprobe: %d!\n", ret);
 }
