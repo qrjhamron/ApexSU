@@ -62,19 +62,32 @@ fun BottomBar(
     modifier: Modifier,
 ) {
     val isManager = Natives.isManager
-    val fullFeatured = true // Always show bottom nav
+    val fullFeatured = isManager && !Natives.requireNewKernel() && rootAvailable()
+
+    val visibleDestinations = if (fullFeatured) {
+        BottomBarDestination.entries
+    } else {
+        listOf(BottomBarDestination.Home, BottomBarDestination.Setting)
+    }
+
+    val items = visibleDestinations.map { destination ->
+        NavigationItem(
+            label = stringResource(destination.label),
+            icon = destination.icon,
+        )
+    }
 
     val mainState = LocalMainPagerState.current
     val enableBlur = LocalEnableBlur.current
     val enableFloatingBottomBar = LocalEnableFloatingBottomBar.current
     val enableFloatingBottomBarBlur = LocalEnableFloatingBottomBarBlur.current
 
-    val items = BottomBarDestination.entries.map { destination ->
-        NavigationItem(
-            label = stringResource(destination.label),
-            icon = destination.icon,
-        )
-    }
+    // Map visible tab index to actual pager page index
+    val pageIndices = visibleDestinations.map { it.ordinal }
+
+    fun tabToPage(tabIndex: Int): Int = pageIndices.getOrElse(tabIndex) { 0 }
+    fun pageToTab(pageIndex: Int): Int = pageIndices.indexOf(pageIndex).coerceAtLeast(0)
+
     if (!enableFloatingBottomBar) {
         NavigationBar(
             modifier = modifier
@@ -94,9 +107,9 @@ fun BottomBar(
                         modifier = Modifier.weight(1f),
                         icon = item.icon,
                         label = item.label,
-                        selected = mainState.selectedPage == index,
+                        selected = mainState.selectedPage == tabToPage(index),
                         onClick = {
-                            mainState.animateToPage(index)
+                            mainState.animateToPage(tabToPage(index))
                         }
                     )
                 }
@@ -111,8 +124,8 @@ fun BottomBar(
                     onClick = {},
                 )
                 .padding(bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
-            selectedIndex = { mainState.selectedPage },
-            onSelected = { mainState.animateToPage(it) },
+            selectedIndex = { pageToTab(mainState.selectedPage) },
+            onSelected = { mainState.animateToPage(tabToPage(it)) },
             backdrop = backdrop,
             tabsCount = items.size,
             isBlurEnabled = enableFloatingBottomBarBlur,
@@ -120,7 +133,7 @@ fun BottomBar(
             items.forEachIndexed { index, item ->
                 FloatingBottomBar(
                     onClick = {
-                        mainState.animateToPage(index)
+                        mainState.animateToPage(tabToPage(index))
                     },
                     modifier = Modifier.defaultMinSize(minWidth = 76.dp)
                 ) {
