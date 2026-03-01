@@ -217,7 +217,7 @@ fun SettingPager(
                         stringResource(id = R.string.settings_theme_mode_monet_dark),
                     )
                     var themeMode by rememberSaveable {
-                        mutableIntStateOf(prefs.getInt("color_mode", 0))
+                        mutableIntStateOf(prefs.getInt("color_mode", 5))
                     }
                     SuperDropdown(
                         title = stringResource(id = R.string.settings_theme),
@@ -279,7 +279,7 @@ fun SettingPager(
                         )
                         var keyColorIndex by rememberSaveable {
                             mutableIntStateOf(
-                                colorValues.indexOf(prefs.getInt("key_color", 0)).takeIf { it >= 0 } ?: 0
+                                colorValues.indexOf(prefs.getInt("key_color", Color(0xFF00BCD4).toArgb())).takeIf { it >= 0 } ?: 7
                             )
                         }
                         SuperDropdown(

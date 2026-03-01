@@ -101,8 +101,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalActivity.current ?: this
             val prefs = context.getSharedPreferences("settings", MODE_PRIVATE)
-            var colorMode by remember { mutableIntStateOf(prefs.getInt("color_mode", 0)) }
-            var keyColorInt by remember { mutableIntStateOf(prefs.getInt("key_color", 0)) }
+            var colorMode by remember { mutableIntStateOf(prefs.getInt("color_mode", 5)) }
+            var keyColorInt by remember { mutableIntStateOf(prefs.getInt("key_color", 0xFF00BCD4.toInt())) }
             var pageScale by remember { mutableFloatStateOf(prefs.getFloat("page_scale", 1f)) }
             var enableBlur by remember { mutableStateOf(prefs.getBoolean("enable_blur", true)) }
             var enableFloatingBottomBar by remember { mutableStateOf(prefs.getBoolean("enable_floating_bottom_bar", false)) }
