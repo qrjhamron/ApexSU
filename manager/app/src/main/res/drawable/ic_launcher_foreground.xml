@@ -5,18 +5,41 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <group
-        android:scaleX="0.135"
-        android:scaleY="0.135">
-        <path
-            android:pathData="M 259 259 H 541 V 541 H 259 V 259 Z"
-            android:strokeWidth="18"
-            android:strokeColor="#1e110d" />
-        <path
-            android:fillColor="#1e110d"
-            android:pathData="M 257 257 H 407 V 407 H 257 V 257 Z" />
-        <path
-            android:fillColor="#1e110d"
-            android:pathData="M 393 393 H 543 V 543 H 393 V 393 Z" />
-    </group>
+    <!-- Apex triangle - outer -->
+    <path
+        android:pathData="M54,25 L30,75 L78,75 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#0066FF"
+        android:fillColor="#1A1B4B"
+        android:fillAlpha="0.8" />
+
+    <!-- Apex triangle - inner accent -->
+    <path
+        android:pathData="M54,37 L39,65 L69,65 Z"
+        android:strokeWidth="1.2"
+        android:strokeColor="#00D4FF"
+        android:fillColor="@android:color/transparent" />
+
+    <!-- Circuit trace left -->
+    <path
+        android:pathData="M38,55 L28,55"
+        android:strokeWidth="1"
+        android:strokeColor="#00D4FF" />
+    <path
+        android:pathData="M27,55 A1.5,1.5 0 1,1 27.01,55"
+        android:fillColor="#00D4FF" />
+
+    <!-- Circuit trace right -->
+    <path
+        android:pathData="M70,55 L80,55"
+        android:strokeWidth="1"
+        android:strokeColor="#00D4FF" />
+    <path
+        android:pathData="M81,55 A1.5,1.5 0 1,1 81.01,55"
+        android:fillColor="#00D4FF" />
+
+    <!-- Apex vertex glow -->
+    <path
+        android:pathData="M54,25 A2,2 0 1,1 54.01,25"
+        android:fillColor="#00D4FF" />
 </vector>
