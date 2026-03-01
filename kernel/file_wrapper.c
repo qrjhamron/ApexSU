@@ -32,6 +32,9 @@ static struct ksu_file_wrapper *ksu_create_file_wrapper(struct file *fp);
 static int ksu_wrapper_open(struct inode *ino, struct file *fp)
 {
     struct path *orig_path = fp->f_path.dentry->d_fsdata;
+    if (!orig_path) {
+        return -EINVAL;
+    }
     struct file *orig_file =
         dentry_open(orig_path, fp->f_flags, current_cred());
     if (IS_ERR(orig_file)) {
