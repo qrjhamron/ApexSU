@@ -110,6 +110,15 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Setup Rust toolchain
+        run: |
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk
+
+      - name: Build JNI bridge
+        working-directory: manager/app/src/main/rust/kernelsu-jni
+        run: cargo ndk -t arm64-v8a build --release
+
       - name: Download arm64 ksud
         uses: actions/download-artifact@v7
         with:
@@ -128,6 +137,8 @@ jobs:
           mkdir -p app/src/main/jniLibs/x86_64
           cp -f ../aarch64-linux-android/release/ksud ../manager/app/src/main/jniLibs/arm64-v8a/libksud.so
           cp -f ../x86_64-linux-android/release/ksud ../manager/app/src/main/jniLibs/x86_64/libksud.so
+          cp -f ../manager/app/src/main/rust/kernelsu-jni/target/aarch64-linux-android/release/libkernelsu.so \
+                ../manager/app/src/main/jniLibs/arm64-v8a/libkernelsu.so
 
       - name: Build with Gradle
         run: ./gradlew clean assembleRelease
