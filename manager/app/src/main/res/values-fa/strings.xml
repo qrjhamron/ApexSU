@@ -45,7 +45,7 @@
     <string name="home_learn_kernelsu_url">https://kernelsu.org/guide/what-is-kernelsu.html</string>
     <string name="home_click_to_learn_kernelsu">یاد بگیرید چگونه از کرنل اس یو و ماژول ها استفاده کنید</string>
     <string name="home_support_title">از ما حمایت کنید</string>
-    <string name="home_support_content">KernelSU رایگان است و همیشه خواهد بود و منبع باز است. با این حال، می توانید با اهدای کمک مالی به ما نشان دهید که برایتان مهم است.</string>
+    <string name="home_support_content">ApexSU رایگان است و همیشه خواهد بود و منبع باز است. با این حال، می توانید با اهدای کمک مالی به ما نشان دهید که برایتان مهم است.</string>
     <string name="about_source_code">
 <![CDATA[ View source code at %1$s<br/>Join our %2$s channel ]]>
 </string>
@@ -63,5 +63,5 @@
     <string name="settings_sucompat">تغییر مسیر باینری su</string>
     <string name="settings_sucompat_summary">تغییر مسیر /system/bin/su به ksud برای برنامه‌هایی که مجوز Superuser در پروفایل برنامه دارند؛ فقط برای فرآیندهای جدید موثر است.</string>
     <string name="settings_kernel_umount">جداسازی هسته</string>
-    <string name="settings_kernel_umount_summary">رفتار جداسازی در سطح هسته که توسط KernelSU کنترل می‌شود</string>
+    <string name="settings_kernel_umount_summary">رفتار جداسازی در سطح هسته که توسط ApexSU کنترل می‌شود</string>
 </resources>

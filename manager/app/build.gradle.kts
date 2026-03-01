@@ -142,7 +142,7 @@ androidComponents {
 
 base {
     archivesName.set(
-        "KernelSU_${managerVersionName}_${managerVersionCode}"
+        "ApexSU_${managerVersionName}_${managerVersionCode}"
     )
 }
 
