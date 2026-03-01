@@ -1,0 +1,12 @@
+[package]
+name = "check_symbol"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "check_symbol"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+object = { version = "0.36", default-features = false, features = ["read", "elf"] }

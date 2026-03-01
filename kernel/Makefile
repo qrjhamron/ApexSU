@@ -13,9 +13,11 @@ compdb:
 	python3 $(MDIR)/.vscode/generate_compdb.py -O $(KDIR) $(MDIR)
 clean:
 	make -C $(KDIR) M=$(MDIR) clean
-	rm check_symbol
-check_symbol: tools/check_symbol.c
-	$(CC) tools/check_symbol.c -o check_symbol
+	rm -f check_symbol
+	cargo clean --manifest-path $(MDIR)/tools/check_symbol_rs/Cargo.toml
+check_symbol: tools/check_symbol_rs/src/main.rs tools/check_symbol_rs/Cargo.toml
+	cargo build --release --manifest-path $(MDIR)/tools/check_symbol_rs/Cargo.toml
+	cp $(MDIR)/tools/check_symbol_rs/target/release/check_symbol $(MDIR)/check_symbol
 format:
 	find . \( -name "*.c" -o -name "*.h" \) -print0 | xargs -0 clang-format -i
 check-format:
