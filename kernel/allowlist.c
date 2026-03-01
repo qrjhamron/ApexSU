@@ -411,22 +411,24 @@ static void do_persistent_allow_list(struct callback_head *_cb)
     struct perm_data *p = NULL;
     loff_t off = 0;
 
+    // Write to temp file first to avoid corrupting allowlist on partial write
     struct file *fp =
-        filp_open(KERNEL_SU_ALLOWLIST, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        filp_open(KERNEL_SU_ALLOWLIST ".tmp",
+                  O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (IS_ERR(fp)) {
-        pr_err("save_allow_list create file failed: %ld\n", PTR_ERR(fp));
+        pr_err("save_allow_list create tmp file failed: %ld\n", PTR_ERR(fp));
         goto out;
     }
 
     // store magic and version
     if (kernel_write(fp, &magic, sizeof(magic), &off) != sizeof(magic)) {
         pr_err("save_allow_list write magic failed.\n");
-        goto close_file;
+        goto close_tmp;
     }
 
     if (kernel_write(fp, &version, sizeof(version), &off) != sizeof(version)) {
         pr_err("save_allow_list write version failed.\n");
-        goto close_file;
+        goto close_tmp;
     }
 
     mutex_lock(&allowlist_mutex);
@@ -434,11 +436,46 @@ static void do_persistent_allow_list(struct callback_head *_cb)
         pr_info("save allow list, name: %s uid :%d, allow: %d\n",
                 p->profile.key, p->profile.current_uid, p->profile.allow_su);
 
-        kernel_write(fp, &p->profile, sizeof(p->profile), &off);
+        if (kernel_write(fp, &p->profile, sizeof(p->profile), &off) !=
+            sizeof(p->profile)) {
+            pr_err("save_allow_list write profile failed.\n");
+            mutex_unlock(&allowlist_mutex);
+            goto close_tmp;
+        }
     }
     mutex_unlock(&allowlist_mutex);
 
-close_file:
+    vfs_fsync(fp, 0);
+    filp_close(fp, 0);
+
+    // Temp write succeeded — now replace the real file
+    {
+        struct file *src, *dst;
+        char buf[512];
+        loff_t rpos = 0, wpos = 0;
+        ssize_t n;
+
+        src = filp_open(KERNEL_SU_ALLOWLIST ".tmp", O_RDONLY, 0);
+        if (IS_ERR(src))
+            goto out;
+
+        dst = filp_open(KERNEL_SU_ALLOWLIST,
+                        O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (IS_ERR(dst)) {
+            filp_close(src, 0);
+            goto out;
+        }
+
+        while ((n = kernel_read(src, buf, sizeof(buf), &rpos)) > 0)
+            kernel_write(dst, buf, n, &wpos);
+
+        vfs_fsync(dst, 0);
+        filp_close(dst, 0);
+        filp_close(src, 0);
+    }
+    goto out;
+
+close_tmp:
     filp_close(fp, 0);
 out:
     kfree(_cb);
