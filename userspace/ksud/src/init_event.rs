@@ -11,6 +11,7 @@ use crate::{
     utils::{self},
 };
 
+/// Handle the post-fs-data init stage: mount modules and run post-fs-data scripts.
 pub fn on_post_data_fs() -> Result<()> {
     ksucalls::report_post_fs_data();
 
@@ -141,11 +142,13 @@ fn run_stage(stage: &str, block: bool) {
     }
 }
 
+/// Handle the services init stage: run service.sh scripts for all modules.
 pub fn on_services() {
     info!("on_services triggered!");
     run_stage("service", false);
 }
 
+/// Handle boot-completed event: run boot-completed scripts and report to kernel.
 pub fn on_boot_completed() {
     ksucalls::report_boot_complete();
     info!("on_boot_completed triggered!");

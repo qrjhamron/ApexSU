@@ -147,6 +147,7 @@ fn foreach_active_module(f: impl FnMut(&Path) -> Result<()>) -> Result<()> {
     foreach_module(Active, f)
 }
 
+/// Load and apply SELinux policy rules from all active modules.
 pub fn load_sepolicy_rule() -> Result<()> {
     foreach_active_module(|path| {
         let rule_file = path.join("sepolicy.rule");
@@ -164,6 +165,7 @@ pub fn load_sepolicy_rule() -> Result<()> {
     Ok(())
 }
 
+/// Execute a shell script with busybox, optionally waiting for completion.
 pub fn exec_script<T: AsRef<Path>>(path: T, wait: bool) -> Result<()> {
     info!("exec {}", path.as_ref().display());
 
@@ -218,7 +220,11 @@ pub fn exec_script<T: AsRef<Path>>(path: T, wait: bool) -> Result<()> {
         };
     }
     command = command
-        .current_dir(path.as_ref().parent().unwrap())
+        .current_dir(
+            path.as_ref()
+                .parent()
+                .context("script path has no parent directory")?,
+        )
         .arg("sh")
         .arg(path.as_ref())
         .envs(get_common_script_envs());
@@ -236,6 +242,7 @@ pub fn exec_script<T: AsRef<Path>>(path: T, wait: bool) -> Result<()> {
     result.map_err(|e| anyhow!("Failed to exec {}: {e}", path.as_ref().display()))
 }
 
+/// Execute stage-specific scripts (e.g., post-fs-data, service) for all active modules.
 pub fn exec_stage_script(stage: &str, block: bool) -> Result<()> {
     let metamodule_dir = metamodule::get_metamodule_path().and_then(|path| canonicalize(path).ok());
 
@@ -259,6 +266,7 @@ pub fn exec_stage_script(stage: &str, block: bool) -> Result<()> {
     Ok(())
 }
 
+/// Execute all scripts in a common directory (e.g., post-fs-data.d, service.d).
 pub fn exec_common_scripts(dir: &str, wait: bool) -> Result<()> {
     let script_dir = Path::new(defs::ADB_DIR).join(dir);
     if !script_dir.exists() {
@@ -281,6 +289,7 @@ pub fn exec_common_scripts(dir: &str, wait: bool) -> Result<()> {
     Ok(())
 }
 
+/// Load system.prop files from all active modules.
 pub fn load_system_prop() -> Result<()> {
     foreach_active_module(|module| {
         let system_prop = module.join("system.prop");
@@ -303,6 +312,7 @@ pub fn load_system_prop() -> Result<()> {
     Ok(())
 }
 
+/// Remove modules marked for deletion (those with `remove` flag file).
 pub fn prune_modules() -> Result<()> {
     foreach_module(All, |module| {
         if !module.join(defs::REMOVE_FILE_NAME).exists() {
@@ -362,6 +372,7 @@ pub fn prune_modules() -> Result<()> {
     Ok(())
 }
 
+/// Process module updates: move pending updates into active module directory.
 pub fn handle_updated_modules() -> Result<()> {
     let modules_root = Path::new(MODULE_DIR);
     foreach_module(ModuleType::Updated, |updated_module| {
@@ -543,6 +554,7 @@ fn install_module_to_system(zip: &str) -> Result<()> {
     Ok(())
 }
 
+/// Install a module from a ZIP file.
 pub fn install_module(zip: &str) -> Result<()> {
     let result = install_module_to_system(zip);
     if let Err(ref e) = result {
@@ -551,6 +563,7 @@ pub fn install_module(zip: &str) -> Result<()> {
     result
 }
 
+/// Undo a pending module uninstall by removing the `remove` flag file.
 pub fn undo_uninstall_module(id: &str) -> Result<()> {
     validate_module_id(id)?;
 
@@ -568,6 +581,7 @@ pub fn undo_uninstall_module(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Mark a module for uninstallation by creating a `remove` flag file.
 pub fn uninstall_module(id: &str) -> Result<()> {
     validate_module_id(id)?;
 
@@ -583,6 +597,7 @@ pub fn uninstall_module(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Execute a module's action.sh script.
 pub fn run_action(id: &str) -> Result<()> {
     validate_module_id(id)?;
 
@@ -590,6 +605,7 @@ pub fn run_action(id: &str) -> Result<()> {
     exec_script(&action_script_path, true)
 }
 
+/// Enable a disabled module by removing its `disable` flag file.
 pub fn enable_module(id: &str) -> Result<()> {
     validate_module_id(id)?;
 
@@ -607,6 +623,7 @@ pub fn enable_module(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Disable a module by creating a `disable` flag file.
 pub fn disable_module(id: &str) -> Result<()> {
     let module_path = Path::new(defs::MODULE_DIR).join(id);
     ensure!(module_path.exists(), "Module {id} not found");
@@ -619,10 +636,12 @@ pub fn disable_module(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Disable all installed modules.
 pub fn disable_all_modules() -> Result<()> {
     mark_all_modules(defs::DISABLE_FILE_NAME)
 }
 
+/// Mark all installed modules for uninstallation.
 pub fn uninstall_all_modules() -> Result<()> {
     info!("Uninstalling all modules");
     mark_all_modules(defs::REMOVE_FILE_NAME)
@@ -809,6 +828,7 @@ fn list_module(path: &str) -> Vec<HashMap<String, String>> {
     modules
 }
 
+/// List all installed modules with their metadata as JSON.
 pub fn list_modules() -> Result<()> {
     let modules = list_module(defs::MODULE_DIR);
     println!("{}", serde_json::to_string_pretty(&modules)?);

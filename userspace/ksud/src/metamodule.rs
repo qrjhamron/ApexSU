@@ -224,9 +224,15 @@ pub fn exec_metauninstall_script(module_id: &str) -> Result<()> {
 
     info!("Executing metamodule metauninstall.sh for module: {module_id}",);
 
+    let script_str = metauninstall_path
+        .to_str()
+        .context("metauninstall path is not valid UTF-8")?;
+    let script_dir = metauninstall_path
+        .parent()
+        .context("metauninstall path has no parent directory")?;
     let result = Command::new(assets::BUSYBOX_PATH)
-        .args(["sh", metauninstall_path.to_str().unwrap()])
-        .current_dir(metauninstall_path.parent().unwrap())
+        .args(["sh", script_str])
+        .current_dir(script_dir)
         .envs(crate::module::get_common_script_envs())
         .env("MODULE_ID", module_id)
         .status()?;
@@ -248,8 +254,11 @@ pub fn exec_mount_script(module_dir: &str) -> Result<()> {
 
     info!("Executing mount script for metamodule");
 
+    let script_str = mount_script
+        .to_str()
+        .context("mount script path is not valid UTF-8")?;
     let result = Command::new(assets::BUSYBOX_PATH)
-        .args(["sh", mount_script.to_str().unwrap()])
+        .args(["sh", script_str])
         .envs(crate::module::get_common_script_envs())
         .env("MODULE_DIR", module_dir)
         .status()?;

@@ -14,6 +14,7 @@ const FEATURE_CONFIG_PATH: &str = concatcp!(defs::WORKING_DIR, ".feature_config"
 const FEATURE_MAGIC: u32 = 0x7f4b5355;
 const FEATURE_VERSION: u32 = 1;
 
+/// Supported kernel feature identifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum FeatureId {
@@ -22,6 +23,7 @@ pub enum FeatureId {
 }
 
 impl FeatureId {
+    /// Convert a raw u32 to a feature identifier.
     pub const fn from_u32(id: u32) -> Option<Self> {
         match id {
             0 => Some(Self::SuCompat),
@@ -57,6 +59,7 @@ fn parse_feature_id(name: &str) -> Result<FeatureId> {
     }
 }
 
+/// Load feature configuration from the binary config file.
 pub fn load_binary_config() -> Result<HashMap<u32, u64>> {
     let path = Path::new(FEATURE_CONFIG_PATH);
     if !path.exists() {
@@ -112,6 +115,7 @@ pub fn load_binary_config() -> Result<HashMap<u32, u64>> {
     Ok(features)
 }
 
+/// Save feature configuration to the binary config file.
 pub fn save_binary_config(features: &HashMap<u32, u64>) -> Result<()> {
     crate::utils::ensure_dir_exists(Path::new(defs::WORKING_DIR))?;
 
@@ -142,6 +146,7 @@ pub fn save_binary_config(features: &HashMap<u32, u64>) -> Result<()> {
     Ok(())
 }
 
+/// Apply feature configuration to the running kernel.
 pub fn apply_config(features: &HashMap<u32, u64>) {
     log::info!("Applying feature configuration to kernel...");
 
@@ -165,6 +170,7 @@ pub fn apply_config(features: &HashMap<u32, u64>) {
     log::info!("Applied {applied} features successfully");
 }
 
+/// Query and display a kernel feature by name or ID.
 pub fn get_feature(id: &str) -> Result<()> {
     let feature_id = parse_feature_id(id)?;
     let (value, supported) = crate::ksucalls::get_feature(feature_id as u32)
@@ -186,6 +192,7 @@ pub fn get_feature(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Query and display a feature's saved configuration.
 pub fn get_feature_config(id: &str) -> Result<()> {
     let feature_id = parse_feature_id(id)?;
 
@@ -208,6 +215,7 @@ pub fn get_feature_config(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Set a kernel feature value by name or ID.
 pub fn set_feature(id: &str, value: u64) -> Result<()> {
     let feature_id = parse_feature_id(id)?;
 
@@ -255,6 +263,7 @@ pub fn set_feature(id: &str, value: u64) -> Result<()> {
     Ok(())
 }
 
+/// List all available features and their current status.
 pub fn list_features() {
     println!("Available Features:");
     println!("{}", "=".repeat(80));
@@ -314,6 +323,7 @@ pub fn list_features() {
     }
 }
 
+/// Load saved feature config and apply it to the running kernel.
 pub fn load_config_and_apply() -> Result<()> {
     let features = load_binary_config()?;
 
@@ -327,6 +337,7 @@ pub fn load_config_and_apply() -> Result<()> {
     Ok(())
 }
 
+/// Save current kernel feature state to the binary config file.
 pub fn save_config() -> Result<()> {
     let mut features = HashMap::new();
 
@@ -350,6 +361,7 @@ pub fn save_config() -> Result<()> {
     Ok(())
 }
 
+/// Check whether a feature is managed by a module, supported, or unsupported.
 pub fn check_feature(id: &str) -> Result<()> {
     let feature_id = parse_feature_id(id)?;
 
@@ -377,6 +389,7 @@ pub fn check_feature(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Initialize features from saved config during boot, adding defaults for any missing.
 pub fn init_features() -> Result<()> {
     log::info!("Initializing features from config...");
 
