@@ -22,6 +22,16 @@ static struct group_info root_groups = { .usage = REFCOUNT_INIT(2) };
 static struct group_info root_groups = { .usage = ATOMIC_INIT(2) };
 #endif
 
+/*
+ * setup_groups - Configure supplementary group list for root profile.
+ * @profile: root profile containing desired group list
+ * @cred: credential being prepared (not yet committed)
+ *
+ * On failure (invalid group count, allocation error, invalid gid), logs
+ * a warning and returns without modifying cred groups. The caller
+ * proceeds with default groups, which is acceptable since the process
+ * still gets root — just without custom supplementary groups.
+ */
 void setup_groups(struct root_profile *profile, struct cred *cred)
 {
     if (profile->groups_count > KSU_MAX_GROUPS) {
