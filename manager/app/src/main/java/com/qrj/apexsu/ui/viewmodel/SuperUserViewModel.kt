@@ -298,10 +298,17 @@ class SuperUserViewModel : ViewModel() {
 
     fun loadAppList(force: Boolean = false) {
         viewModelScope.launch {
-            if (force || apps.isEmpty()) {
-                fetchAppList()
-            } else {
-                refreshAppList()
+            try {
+                if (force || apps.isEmpty()) {
+                    fetchAppList()
+                } else {
+                    refreshAppList()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load app list", e)
+                withContext(Dispatchers.Main) {
+                    isRefreshing = false
+                }
             }
         }
     }
