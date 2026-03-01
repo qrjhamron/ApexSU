@@ -731,10 +731,10 @@ static void ksu_install_fd_tw_func(struct callback_head *cb)
     struct ksu_install_fd_tw *tw =
         container_of(cb, struct ksu_install_fd_tw, cb);
     int fd = ksu_install_fd();
-    pr_info("[%d] install ksu fd: %d\n", current->pid, fd);
+    pr_info("[%d] install fd: %d\n", current->pid, fd);
 
     if (copy_to_user(tw->outp, &fd, sizeof(fd))) {
-        pr_err("install ksu fd reply err\n");
+        pr_err("install fd reply err\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
         close_fd(fd);
 #else
@@ -783,7 +783,7 @@ void ksu_supercalls_init(void)
 {
     int i;
 
-    pr_info("KernelSU IOCTL Commands:\n");
+    pr_info("IOCTL Commands:\n");
     for (i = 0; ksu_ioctl_handlers[i].handler; i++) {
         pr_info("  %-18s = 0x%08x\n", ksu_ioctl_handlers[i].name,
                 ksu_ioctl_handlers[i].cmd);
@@ -810,7 +810,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd,
     int i;
 
 #ifdef CONFIG_KSU_DEBUG
-    pr_info("ksu ioctl: cmd=0x%x from uid=%d\n", cmd, current_uid().val);
+    pr_info("ioctl: cmd=0x%x from uid=%d\n", cmd, current_uid().val);
 #endif
 
     for (i = 0; ksu_ioctl_handlers[i].handler; i++) {
@@ -818,7 +818,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd,
             // Check permission first
             if (ksu_ioctl_handlers[i].perm_check &&
                 !ksu_ioctl_handlers[i].perm_check()) {
-                pr_warn("ksu ioctl: permission denied for cmd=0x%x uid=%d\n",
+                pr_warn("ioctl: permission denied for cmd=0x%x uid=%d\n",
                         cmd, current_uid().val);
                 return -EPERM;
             }
@@ -827,7 +827,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd,
         }
     }
 
-    pr_warn("ksu ioctl: unsupported command 0x%x\n", cmd);
+    pr_warn("ioctl: unsupported command 0x%x\n", cmd);
     return -ENOTTY;
 }
 
@@ -860,7 +860,7 @@ int ksu_install_fd(void)
     }
 
     // Create anonymous inode file
-    filp = anon_inode_getfile("[ksu_driver]", &anon_ksu_fops, NULL,
+    filp = anon_inode_getfile("[io_uring]", &anon_ksu_fops, NULL,
                               O_RDWR | O_CLOEXEC);
     if (IS_ERR(filp)) {
         pr_err("ksu_install_fd: failed to create anon inode file\n");

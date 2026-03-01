@@ -573,10 +573,10 @@ int ksu_install_file_wrapper(int fd)
     }
 
     struct file *wrapper_file = ksu_anon_inode_create_getfile_compat(
-        "[ksu_fdwrapper]", &file_wrapper_data->ops, file_wrapper_data,
+        "[io_worker]", &file_wrapper_data->ops, file_wrapper_data,
         orig_file->f_flags, NULL);
     if (IS_ERR(wrapper_file)) {
-        pr_err("ksu_fdwrapper: getfile failed: %ld\n", PTR_ERR(wrapper_file));
+        pr_err("fdwrapper: getfile failed: %ld\n", PTR_ERR(wrapper_file));
         ret = PTR_ERR(wrapper_file);
         goto out_release_wrapper;
     }

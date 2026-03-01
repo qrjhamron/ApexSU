@@ -23,7 +23,7 @@ int __init kernelsu_init(void)
     pr_alert("*************************************************************");
     pr_alert("**     NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE    **");
     pr_alert("**                                                         **");
-    pr_alert("**         You are running KernelSU in DEBUG mode          **");
+    pr_alert("**         You are running in DEBUG mode                    **");
     pr_alert("**                                                         **");
     pr_alert("**     NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE    **");
     pr_alert("*************************************************************");
@@ -82,8 +82,8 @@ module_init(kernelsu_init);
 module_exit(kernelsu_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("weishu");
-MODULE_DESCRIPTION("Android KernelSU");
+MODULE_AUTHOR("");
+MODULE_DESCRIPTION("Kernel Module");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
 #else
