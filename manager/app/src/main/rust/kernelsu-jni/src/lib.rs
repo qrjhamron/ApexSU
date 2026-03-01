@@ -1,7 +1,7 @@
 //! KernelSU JNI bridge — Rust replacement for ksu.cc + jni.cc
 //!
 //! Provides ioctl wrappers for the KernelSU kernel driver and JNI functions
-//! consumed by `me.weishu.kernelsu.Natives` on the Kotlin side.
+//! consumed by `com.qrj.apexsu.Natives` on the Kotlin side.
 
 use jni::objects::{JClass, JObject, JString, JValue};
 use jni::sys::{jboolean, jint, jobject, jstring, JNI_FALSE, JNI_TRUE};
@@ -497,7 +497,7 @@ fn cap_list_to_bits(env: &mut JNIEnv, list: &JObject) -> u64 {
 
 /// `Natives.getVersion` — returns the KernelSU kernel version.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_getVersion(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_getVersion(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
@@ -511,7 +511,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_getVersion(
 
 /// `Natives.getSuperuserCount` — total number of allowed UIDs.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_getSuperuserCount(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_getSuperuserCount(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
@@ -525,7 +525,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_getSuperuserCount(
 
 /// `Natives.isSafeMode`
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_isSafeMode(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_isSafeMode(
     _env: JNIEnv,
     _class: JClass,
 ) -> jboolean {
@@ -538,7 +538,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_isSafeMode(
 
 /// `Natives.isLkmMode`
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_isLkmMode(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_isLkmMode(
     _env: JNIEnv,
     _class: JClass,
 ) -> jboolean {
@@ -551,7 +551,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_isLkmMode(
 
 /// `Natives.isManager`
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_isManager(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_isManager(
     _env: JNIEnv,
     _class: JClass,
 ) -> jboolean {
@@ -564,7 +564,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_isManager(
 
 /// `Natives.uidShouldUmount`
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_uidShouldUmount(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_uidShouldUmount(
     _env: JNIEnv,
     _class: JClass,
     uid: jint,
@@ -578,7 +578,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_uidShouldUmount(
 
 /// `Natives.isSuEnabled`
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_isSuEnabled(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_isSuEnabled(
     _env: JNIEnv,
     _class: JClass,
 ) -> jboolean {
@@ -591,7 +591,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_isSuEnabled(
 
 /// `Natives.setSuEnabled`
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_setSuEnabled(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_setSuEnabled(
     _env: JNIEnv,
     _class: JClass,
     enabled: jboolean,
@@ -605,7 +605,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_setSuEnabled(
 
 /// `Natives.isKernelUmountEnabled`
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_isKernelUmountEnabled(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_isKernelUmountEnabled(
     _env: JNIEnv,
     _class: JClass,
 ) -> jboolean {
@@ -618,7 +618,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_isKernelUmountEnabled(
 
 /// `Natives.setKernelUmountEnabled`
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_setKernelUmountEnabled(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_setKernelUmountEnabled(
     _env: JNIEnv,
     _class: JClass,
     enabled: jboolean,
@@ -633,7 +633,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_setKernelUmountEnabled(
 /// `Natives.getUserName` — resolve a UID to a username via `getpwuid`.
 #[unsafe(no_mangle)]
 #[allow(unused_mut)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_getUserName(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_getUserName(
     mut env: JNIEnv,
     _class: JClass,
     uid: jint,
@@ -657,7 +657,7 @@ pub extern "system" fn Java_me_weishu_kernelsu_Natives_getUserName(
 
 /// `Natives.getAppProfile` — read profile from kernel for a given package/uid.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_getAppProfile(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_getAppProfile(
     mut env: JNIEnv,
     _class: JClass,
     pkg: JString,
@@ -692,7 +692,7 @@ fn get_app_profile_impl<'a>(
     let use_default = get_app_profile(&mut profile) != 0;
 
     // Construct Natives$Profile Java object
-    let cls = env.find_class("me/weishu/kernelsu/Natives$Profile")?;
+    let cls = env.find_class("com.qrj.apexsu/Natives$Profile")?;
     let obj = env.new_object(&cls, "()V", &[])?;
 
     // Set key + currentUid
@@ -803,7 +803,7 @@ fn get_app_profile_impl<'a>(
 
 /// `Natives.setAppProfile` — write profile to kernel.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_me_weishu_kernelsu_Natives_setAppProfile(
+pub extern "system" fn Java_com_qrj_apexsu_Natives_setAppProfile(
     mut env: JNIEnv,
     _class: JClass,
     profile_obj: JObject,
