@@ -38,14 +38,18 @@ pub fn get_apk_signature(apk: &str) -> Result<(u32, String)> {
     f.seek(SeekFrom::Current(12))?;
     // offset
     f.read_exact(&mut size4)?;
-    f.seek(SeekFrom::Start(u64::from(u32::from_le_bytes(size4)) - 0x18))?;
+    let central_dir_offset = u64::from(u32::from_le_bytes(size4));
+    ensure!(central_dir_offset >= 0x18, "Invalid APK: central directory offset too small");
+    f.seek(SeekFrom::Start(central_dir_offset - 0x18))?;
 
     f.read_exact(&mut size8)?;
     f.read_exact(&mut buffer)?;
 
     ensure!(&buffer == b"APK Sig Block 42", "Can not found sig block");
 
-    let pos = u64::from(u32::from_le_bytes(size4)) - (u64::from_le_bytes(size8) + 0x8);
+    let sig_block_size = u64::from_le_bytes(size8) + 0x8;
+    ensure!(central_dir_offset >= sig_block_size, "Invalid APK: sig block larger than offset");
+    let pos = central_dir_offset - sig_block_size;
     f.seek(SeekFrom::Start(pos))?;
     f.read_exact(&mut size_of_block)?;
 
