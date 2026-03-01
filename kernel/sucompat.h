@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #ifndef __KSU_H_SUCOMPAT
 #define __KSU_H_SUCOMPAT
 #include <linux/types.h>

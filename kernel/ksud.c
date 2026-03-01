@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/rcupdate.h>
 #include <linux/slab.h>
 #include <linux/task_work.h>
@@ -215,7 +216,18 @@ fail:
     return false;
 }
 
-// IMPORTANT NOTE: the call from execve_handler_pre WON'T provided correct value for envp and flags in GKI version
+/*
+ * ksu_handle_execveat_ksud - Intercept execve calls for KernelSU initialization.
+ * @fd: file descriptor (AT_FDCWD for path-based exec).
+ * @filename_ptr: pointer to the filename struct being executed.
+ * @argv: user argument vector.
+ * @envp: user environment vector (may be NULL from kprobe context).
+ * @flags: exec flags (may be NULL from kprobe context).
+ *
+ * Detects init second_stage and first zygote execution to trigger
+ * SELinux rule application and post-fs-data processing.
+ * Returns 0 (always allows the exec to proceed).
+ */
 int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
                              struct user_arg_ptr *argv,
                              struct user_arg_ptr *envp, int *flags)
@@ -381,6 +393,13 @@ static bool is_init_rc(struct file *fp)
     return true;
 }
 
+/*
+ * ksu_handle_sys_read - Intercept read syscalls to inject KernelSU init.rc entries.
+ * @fd: file descriptor being read.
+ *
+ * When the init process reads init.rc, replaces the file operations with
+ * proxied versions that append KERNEL_SU_RC content after the original EOF.
+ */
 static void ksu_handle_sys_read(unsigned int fd)
 {
     struct file *file = fget(fd);

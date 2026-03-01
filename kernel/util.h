@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #ifndef __KSU_UTIL_H
 #define __KSU_UTIL_H
 

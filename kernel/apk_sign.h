@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #ifndef __KSU_H_APK_V2_SIGN
 #define __KSU_H_APK_V2_SIGN
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/anon_inodes.h>
 #include <linux/capability.h>
 #include <linux/cred.h>
@@ -152,6 +153,14 @@ static int do_check_safemode(void __user *arg)
     return 0;
 }
 
+/*
+ * do_new_get_allow_list_common - Retrieve the allow/deny list of UIDs.
+ * @arg: userspace pointer to a ksu_new_get_allow_list_cmd struct.
+ * @allow: if true, return allowed UIDs; if false, return denied UIDs.
+ *
+ * Copies the matching UID array back to userspace.
+ * Returns 0 on success, negative errno on failure.
+ */
 static int do_new_get_allow_list_common(void __user *arg, bool allow)
 {
     struct ksu_new_get_allow_list_cmd cmd;
@@ -408,6 +417,14 @@ static int do_get_wrapper_fd(void __user *arg)
     return ksu_install_file_wrapper(cmd.fd);
 }
 
+/*
+ * do_manage_mark - Handle mark/unmark/refresh operations on task processes.
+ * @arg: userspace pointer to a ksu_manage_mark_cmd struct.
+ *
+ * Supports get, mark, unmark, and refresh operations for managing
+ * which processes are tracked by KernelSU.
+ * Returns 0 on success, negative errno on failure.
+ */
 static int do_manage_mark(void __user *arg)
 {
     struct ksu_manage_mark_cmd cmd;
@@ -506,6 +523,13 @@ static int do_nuke_ext4_sysfs(void __user *arg)
 struct list_head mount_list = LIST_HEAD_INIT(mount_list);
 DECLARE_RWSEM(mount_list_lock);
 
+/*
+ * add_try_umount - Manage the list of mount points to attempt unmounting.
+ * @arg: userspace pointer to a ksu_add_try_umount_cmd struct.
+ *
+ * Supports add, delete, and wipe operations on the module mount list.
+ * Returns 0 on success, negative errno on failure.
+ */
 static int add_try_umount(void __user *arg)
 {
     struct mount_entry *new_entry, *entry, *tmp;
@@ -532,7 +556,8 @@ static int add_try_umount(void __user *arg)
     }
 
     case KSU_UMOUNT_ADD: {
-        long len = strncpy_from_user(buf, (const char __user *)cmd.arg, 256);
+        long len = strncpy_from_user(buf, (const char __user *)cmd.arg,
+                                        sizeof(buf));
         if (len <= 0)
             return -EFAULT;
 

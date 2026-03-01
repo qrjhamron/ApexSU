@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #ifndef __KSU_H_KSU_CORE
 #define __KSU_H_KSU_CORE
 

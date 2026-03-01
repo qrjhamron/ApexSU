@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/err.h>
 #include <linux/fs.h>
 #include <linux/gfp.h>
@@ -17,6 +18,8 @@
 #include "apk_sign.h"
 #include "app_profile.h"
 #include "klog.h" // IWYU pragma: keep
+
+#define ZIP_LOCAL_FILE_HEADER_SIG 0x04034b50 /* 'PK\x03\x04' */
 
 struct sdesc {
     struct shash_desc shash;
@@ -140,8 +143,7 @@ static bool has_v1_signature_file(struct file *fp)
 
     while (kernel_read(fp, &header, sizeof(struct zip_entry_header), &pos) ==
            sizeof(struct zip_entry_header)) {
-        if (header.signature != 0x04034b50) {
-            // ZIP magic: 'PK'
+        if (header.signature != ZIP_LOCAL_FILE_HEADER_SIG) {
             return false;
         }
         // Read the entry file name

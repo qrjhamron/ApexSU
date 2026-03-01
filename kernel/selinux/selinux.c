@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include "selinux.h"
 #include "linux/cred.h"
 #include "linux/sched.h"

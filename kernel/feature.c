@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include "feature.h"
 #include "klog.h" // IWYU pragma: keep
 

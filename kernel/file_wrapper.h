@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #ifndef KSU_FILE_WRAPPER_H
 #define KSU_FILE_WRAPPER_H
 

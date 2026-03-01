@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/rcupdate.h>
 #include <linux/limits.h>
 #include <linux/rculist.h>
@@ -66,7 +67,8 @@ static void init_default_profiles()
     memcpy(&default_root_profile.capabilities.effective, &full_cap,
            sizeof(default_root_profile.capabilities.effective));
     default_root_profile.namespaces = KSU_NS_INHERITED;
-    strcpy(default_root_profile.selinux_domain, KSU_DEFAULT_SELINUX_DOMAIN);
+    strscpy(default_root_profile.selinux_domain, KSU_DEFAULT_SELINUX_DOMAIN,
+            sizeof(default_root_profile.selinux_domain));
 
     // This means that we will umount modules by default!
     default_non_root_profile.umount_modules = true;
@@ -107,9 +109,10 @@ static void ksu_grant_root_to_shell()
         .allow_su = true,
         .current_uid = 2000,
     };
-    strcpy(profile.key, "com.android.shell");
-    strcpy(profile.rp_config.profile.selinux_domain,
-           KSU_DEFAULT_SELINUX_DOMAIN);
+    strscpy(profile.key, "com.android.shell", sizeof(profile.key));
+    strscpy(profile.rp_config.profile.selinux_domain,
+            KSU_DEFAULT_SELINUX_DOMAIN,
+            sizeof(profile.rp_config.profile.selinux_domain));
     ksu_set_app_profile(&profile);
 }
 #endif
@@ -166,6 +169,15 @@ static bool profile_valid(struct app_profile *profile)
     return true;
 }
 
+/*
+ * ksu_set_app_profile - Create or update an app profile in the allow list.
+ * @profile: pointer to the app_profile to set.
+ *
+ * Updates the allow list entry if a matching UID+key exists, otherwise
+ * creates a new entry. Also updates the bitmap/array caches and
+ * handles default profile overrides.
+ * Returns 0 on success, negative errno on failure.
+ */
 int ksu_set_app_profile(struct app_profile *profile)
 {
     struct perm_data *p = NULL, *np;
@@ -385,6 +397,13 @@ bool ksu_get_allow_list(int *array, u16 length, u16 *out_length, u16 *out_total,
 }
 
 // TODO: move to kernel thread or work queue
+/*
+ * do_persistent_allow_list - Write the current allow list to persistent storage.
+ * @_cb: callback head (freed after completion).
+ *
+ * Serializes all app profiles to KERNEL_SU_ALLOWLIST with a magic header
+ * and version number. Runs as a task_work callback on the init process.
+ */
 static void do_persistent_allow_list(struct callback_head *_cb)
 {
     u32 magic = FILE_MAGIC;
@@ -451,6 +470,12 @@ put_task:
     put_task_struct(tsk);
 }
 
+/*
+ * ksu_load_allow_list - Load the persisted allow list from disk.
+ *
+ * Reads app profiles from KERNEL_SU_ALLOWLIST, validates the file magic
+ * and version, then populates the in-memory allow list via ksu_set_app_profile.
+ */
 void ksu_load_allow_list()
 {
     loff_t off = 0;
@@ -505,6 +530,14 @@ exit:
     filp_close(fp, 0);
 }
 
+/*
+ * ksu_prune_allowlist - Remove stale entries from the allow list.
+ * @is_uid_valid: callback to check if a UID/package is still valid.
+ * @data: opaque data passed to the callback.
+ *
+ * Iterates through the allow list and removes entries for which
+ * is_uid_valid returns false. Persists changes if any were made.
+ */
 void ksu_prune_allowlist(bool (*is_uid_valid)(uid_t, char *, void *),
                          void *data)
 {

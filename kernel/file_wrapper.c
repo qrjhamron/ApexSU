@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/gfp.h>
 #include <linux/fdtable.h>
 #include <linux/export.h>
@@ -373,6 +374,15 @@ static int ksu_wrapper_release(struct inode *inode, struct file *filp)
     return 0;
 }
 
+/*
+ * ksu_create_file_wrapper - Create a file wrapper that proxies all file operations.
+ * @fp: the original file to wrap.
+ *
+ * Allocates a ksu_file_wrapper and populates its ops struct by mapping
+ * each supported file_operation from the original file to the corresponding
+ * ksu_wrapper_* function. Takes a reference on the original file.
+ * Returns the wrapper on success, or ERR_PTR on failure.
+ */
 static struct ksu_file_wrapper *ksu_create_file_wrapper(struct file *fp)
 {
     struct ksu_file_wrapper *p =
@@ -533,6 +543,14 @@ err:
 }
 #endif
 
+/*
+ * ksu_install_file_wrapper - Wrap an existing fd with a KernelSU file wrapper.
+ * @fd: the file descriptor to wrap.
+ *
+ * Creates a new anonymous inode file that proxies all operations to the
+ * original file, with SELinux SID overridden to ksu_file_sid.
+ * Returns the new fd number on success, or negative errno on failure.
+ */
 int ksu_install_file_wrapper(int fd)
 {
     int out_fd, ret;
