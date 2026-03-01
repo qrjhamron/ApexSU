@@ -236,7 +236,7 @@ fun MainScreen() {
     val mainPagerState = rememberMainPagerState(pagerState)
     val isManager = Natives.isManager
     val isFullFeatured = isManager && !Natives.requireNewKernel()
-    var userScrollEnabled by remember(isFullFeatured) { mutableStateOf(isFullFeatured) }
+    var userScrollEnabled by remember(isFullFeatured) { mutableStateOf(true) }
     val surfaceColor = MiuixTheme.colorScheme.surface
     val hazeState = remember { HazeState() }
     val hazeStyle = if (enableBlur) {

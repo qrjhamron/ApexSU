@@ -62,8 +62,7 @@ fun BottomBar(
     modifier: Modifier,
 ) {
     val isManager = Natives.isManager
-    val fullFeatured = isManager && !Natives.requireNewKernel() && rootAvailable()
-    if (!fullFeatured) return
+    val fullFeatured = true // Always show bottom nav
 
     val mainState = LocalMainPagerState.current
     val enableBlur = LocalEnableBlur.current
