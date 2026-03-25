@@ -273,13 +273,13 @@ pub fn exec_mount_script(module_dir: &str) -> Result<()> {
 }
 
 /// Execute metamodule script for a specific stage
-pub fn exec_stage_script(stage: &str, block: bool) -> Result<()> {
+pub fn exec_stage_script(stage: &str, block: bool, timeout_sec: u32) -> Result<()> {
     let Some(script_path) = check_metamodule_script(&format!("{stage}.sh")) else {
         return Ok(());
     };
 
     info!("Executing metamodule {stage}.sh");
-    crate::module::exec_script(&script_path, block)?;
+    crate::module::exec_script(&script_path, block, timeout_sec)?;
     info!("Metamodule {stage}.sh executed successfully");
     Ok(())
 }

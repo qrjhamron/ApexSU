@@ -44,7 +44,7 @@ pub fn on_post_data_fs() -> Result<()> {
         warn!("safe mode, skip common post-fs-data.d scripts");
     } else {
         // Then exec common post-fs-data scripts
-        if let Err(e) = crate::module::exec_common_scripts("post-fs-data.d", true) {
+        if let Err(e) = crate::module::exec_common_scripts("post-fs-data.d", true, 40) {
             warn!("exec common post-fs-data scripts failed: {e}");
         }
     }
@@ -91,13 +91,12 @@ pub fn on_post_data_fs() -> Result<()> {
     }
 
     // execute metamodule post-fs-data script first (priority)
-    if let Err(e) = metamodule::exec_stage_script("post-fs-data", true) {
+    if let Err(e) = metamodule::exec_stage_script("post-fs-data", true, 40) {
         warn!("exec metamodule post-fs-data script failed: {e}");
     }
 
     // exec modules post-fs-data scripts
-    // TODO: Add timeout
-    if let Err(e) = crate::module::exec_stage_script("post-fs-data", true) {
+    if let Err(e) = crate::module::exec_stage_script("post-fs-data", true, 40) {
         warn!("exec post-fs-data scripts failed: {e}");
     }
 
@@ -111,14 +110,14 @@ pub fn on_post_data_fs() -> Result<()> {
         warn!("execute metamodule mount failed: {e}");
     }
 
-    run_stage("post-mount", true);
+    run_stage("post-mount", true, 40);
 
     std::env::set_current_dir("/").with_context(|| "failed to chdir to /")?;
 
     Ok(())
-}
+    }
 
-fn run_stage(stage: &str, block: bool) {
+    fn run_stage(stage: &str, block: bool, timeout_sec: u32) {
     utils::umask(0);
 
     if utils::has_magisk() {
@@ -131,33 +130,31 @@ fn run_stage(stage: &str, block: bool) {
         return;
     }
 
-    if let Err(e) = crate::module::exec_common_scripts(&format!("{stage}.d"), block) {
+    if let Err(e) = crate::module::exec_common_scripts(&format!("{stage}.d"), block, timeout_sec) {
         warn!("Failed to exec common {stage} scripts: {e}");
     }
 
     // execute metamodule stage script first (priority)
-    if let Err(e) = metamodule::exec_stage_script(stage, block) {
+    if let Err(e) = metamodule::exec_stage_script(stage, block, timeout_sec) {
         warn!("Failed to exec metamodule {stage} script: {e}");
     }
 
     // execute regular modules stage scripts
-    if let Err(e) = crate::module::exec_stage_script(stage, block) {
+    if let Err(e) = crate::module::exec_stage_script(stage, block, timeout_sec) {
         warn!("Failed to exec {stage} scripts: {e}");
     }
-}
+    }
 
-/// Handle the services init stage: run service.sh scripts for all modules.
-pub fn on_services() {
-    info!("on_services triggered!");
-    run_stage("service", false);
-}
+    /// Handle the services init stage: run service.sh scripts for all modules.
+    pub fn on_services() {
+    run_stage("service", false, 0);
+    }
 
-/// Handle boot-completed event: run boot-completed scripts and report to kernel.
+/// Handle the boot-completed init stage: run boot-completed.sh scripts for all modules.
 pub fn on_boot_completed() {
-    ksucalls::report_boot_complete();
     info!("on_boot_completed triggered!");
 
-    run_stage("boot-completed", false);
+    run_stage("boot-completed", false, 0);
 }
 
 #[cfg(unix)]

@@ -157,8 +157,8 @@ pub fn load_sepolicy_rule() -> Result<()> {
     Ok(())
 }
 
-/// Execute a shell script with busybox, optionally waiting for completion.
-pub fn exec_script<T: AsRef<Path>>(path: T, wait: bool) -> Result<()> {
+/// Execute a shell script with busybox, optionally waiting for completion and with a timeout.
+pub fn exec_script<T: AsRef<Path>>(path: T, wait: bool, timeout_sec: u32) -> Result<()> {
     info!("exec {}", path.as_ref().display());
 
     let is_module_script = path.as_ref().starts_with(defs::MODULE_DIR);
@@ -211,15 +211,22 @@ pub fn exec_script<T: AsRef<Path>>(path: T, wait: bool) -> Result<()> {
             })
         };
     }
-    command = command
-        .current_dir(
-            path.as_ref()
-                .parent()
-                .context("script path has no parent directory")?,
-        )
-        .arg("sh")
-        .arg(path.as_ref())
-        .envs(get_common_script_envs());
+
+    command = command.current_dir(
+        path.as_ref()
+            .parent()
+            .context("script path has no parent directory")?,
+    );
+
+    if timeout_sec > 0 {
+        command = command
+            .arg("timeout")
+            .arg("-s")
+            .arg("9")
+            .arg(format!("{timeout_sec}s"));
+    }
+
+    command = command.arg("sh").arg(path.as_ref()).envs(get_common_script_envs());
 
     // Set KSU_MODULE environment variable if module_id was validated successfully
     if let Some(id) = validated_module_id {
@@ -235,7 +242,7 @@ pub fn exec_script<T: AsRef<Path>>(path: T, wait: bool) -> Result<()> {
 }
 
 /// Execute stage-specific scripts (e.g., post-fs-data, service) for all active modules.
-pub fn exec_stage_script(stage: &str, block: bool) -> Result<()> {
+pub fn exec_stage_script(stage: &str, block: bool, timeout_sec: u32) -> Result<()> {
     let metamodule_dir = metamodule::get_metamodule_path().and_then(|path| canonicalize(path).ok());
 
     foreach_active_module(|module| {
@@ -252,14 +259,14 @@ pub fn exec_stage_script(stage: &str, block: bool) -> Result<()> {
             return Ok(());
         }
 
-        exec_script(&script_path, block)
+        exec_script(&script_path, block, timeout_sec)
     })?;
 
     Ok(())
 }
 
 /// Execute all scripts in a common directory (e.g., post-fs-data.d, service.d).
-pub fn exec_common_scripts(dir: &str, wait: bool) -> Result<()> {
+pub fn exec_common_scripts(dir: &str, wait: bool, timeout_sec: u32) -> Result<()> {
     let script_dir = Path::new(defs::ADB_DIR).join(dir);
     if !script_dir.exists() {
         info!("{} not exists, skip", script_dir.display());
@@ -275,7 +282,7 @@ pub fn exec_common_scripts(dir: &str, wait: bool) -> Result<()> {
             continue;
         }
 
-        exec_script(path, wait)?;
+        exec_script(path, wait, timeout_sec)?;
     }
 
     Ok(())
@@ -333,7 +340,7 @@ pub fn prune_modules() -> Result<()> {
         // Then execute module's own uninstall.sh
         let uninstaller = module.join("uninstall.sh");
         if uninstaller.exists()
-            && let Err(e) = exec_script(uninstaller, true)
+            && let Err(e) = exec_script(uninstaller, true, 60)
         {
             warn!("Failed to exec uninstaller: {e}");
         }
@@ -617,7 +624,7 @@ pub fn run_action(id: &str) -> Result<()> {
     validate_module_id(id)?;
 
     let action_script_path = format!("/data/adb/modules/{id}/action.sh");
-    exec_script(&action_script_path, true)
+    exec_script(&action_script_path, true, 0)
 }
 
 /// Enable a disabled module by removing its `disable` flag file.
