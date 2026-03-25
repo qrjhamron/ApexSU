@@ -396,175 +396,33 @@ bool ksu_get_allow_list(int *array, u16 length, u16 *out_length, u16 *out_total,
     return true;
 }
 
-// TODO: move to kernel thread or work queue
-/*
- * do_persistent_allow_list - Write the current allow list to persistent storage.
- * @_cb: callback head (freed after completion).
- *
- * Serializes all app profiles to KERNEL_SU_ALLOWLIST with a magic header
- * and version number. Runs as a task_work callback on the init process.
- */
-static void do_persistent_allow_list(struct callback_head *_cb)
-{
-    u32 magic = FILE_MAGIC;
-    u32 version = FILE_FORMAT_VERSION;
-    struct perm_data *p = NULL;
-    loff_t off = 0;
-
-    // Write to temp file first to avoid corrupting allowlist on partial write
-    struct file *fp =
-        filp_open(KERNEL_SU_ALLOWLIST ".tmp",
-                  O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (IS_ERR(fp)) {
-        pr_err("save_allow_list create tmp file failed: %ld\n", PTR_ERR(fp));
-        goto out;
-    }
-
-    // store magic and version
-    if (kernel_write(fp, &magic, sizeof(magic), &off) != sizeof(magic)) {
-        pr_err("save_allow_list write magic failed.\n");
-        goto close_tmp;
-    }
-
-    if (kernel_write(fp, &version, sizeof(version), &off) != sizeof(version)) {
-        pr_err("save_allow_list write version failed.\n");
-        goto close_tmp;
-    }
-
-    mutex_lock(&allowlist_mutex);
-    list_for_each_entry (p, &allow_list, list) {
-        pr_info("save allow list, name: %s uid :%d, allow: %d\n",
-                p->profile.key, p->profile.current_uid, p->profile.allow_su);
-
-        if (kernel_write(fp, &p->profile, sizeof(p->profile), &off) !=
-            sizeof(p->profile)) {
-            pr_err("save_allow_list write profile failed.\n");
-            mutex_unlock(&allowlist_mutex);
-            goto close_tmp;
-        }
-    }
-    mutex_unlock(&allowlist_mutex);
-
-    vfs_fsync(fp, 0);
-    filp_close(fp, 0);
-
-    // Temp write succeeded — now replace the real file
-    {
-        struct file *src, *dst;
-        char buf[512];
-        loff_t rpos = 0, wpos = 0;
-        ssize_t n;
-
-        src = filp_open(KERNEL_SU_ALLOWLIST ".tmp", O_RDONLY, 0);
-        if (IS_ERR(src))
-            goto out;
-
-        dst = filp_open(KERNEL_SU_ALLOWLIST,
-                        O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (IS_ERR(dst)) {
-            filp_close(src, 0);
-            goto out;
-        }
-
-        while ((n = kernel_read(src, buf, sizeof(buf), &rpos)) > 0)
-            kernel_write(dst, buf, n, &wpos);
-
-        vfs_fsync(dst, 0);
-        filp_close(dst, 0);
-        filp_close(src, 0);
-    }
-    goto out;
-
-close_tmp:
-    filp_close(fp, 0);
-out:
-    kfree(_cb);
-}
-
+// Use usermodehelper to trigger ksud sync
 void ksu_persistent_allow_list()
 {
-    struct task_struct *tsk;
+    static char *envp[] = { "HOME=/", "TERM=linux",
+                            "PATH=/sbin:/system/bin:/system/xbin:/data/adb/ksu",
+                            NULL };
+    char *argv[] = { KSUD_PATH, "profile", "sync", NULL };
 
-    tsk = get_pid_task(find_vpid(1), PIDTYPE_PID);
-    if (!tsk) {
-        pr_err("save_allow_list find init task err\n");
-        return;
-    }
+    pr_info("triggering allowlist sync via ksud\n");
 
-    struct callback_head *cb =
-        kzalloc(sizeof(struct callback_head), GFP_KERNEL);
-    if (!cb) {
-        pr_err("save_allow_list alloc cb err\b");
-        goto put_task;
+    int ret = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+    if (ret) {
+        pr_err("failed to trigger ksud sync: %d\n", ret);
     }
-    cb->func = do_persistent_allow_list;
-    if (task_work_add(tsk, cb, TWA_RESUME)) {
-        kfree(cb);
-        pr_warn("save_allow_list add task_work failed\n");
-    }
-
-put_task:
-    put_task_struct(tsk);
 }
 
 /*
- * ksu_load_allow_list - Load the persisted allow list from disk.
- *
- * Reads app profiles from KERNEL_SU_ALLOWLIST, validates the file magic
- * and version, then populates the in-memory allow list via ksu_set_app_profile.
+ * ksu_load_allow_list - Now handled by ksud in userspace.
+ * This is a stub to maintain compatibility with other kernel calls.
  */
 void ksu_load_allow_list()
 {
-    loff_t off = 0;
-    ssize_t ret = 0;
-    struct file *fp = NULL;
-    u32 magic;
-    u32 version;
-
 #ifdef CONFIG_KSU_DEBUG
     // always allow adb shell by default
     ksu_grant_root_to_shell();
 #endif
-
-    // load allowlist now!
-    fp = filp_open(KERNEL_SU_ALLOWLIST, O_RDONLY, 0);
-    if (IS_ERR(fp)) {
-        pr_err("load_allow_list open file failed: %ld\n", PTR_ERR(fp));
-        return;
-    }
-
-    // verify magic
-    if (kernel_read(fp, &magic, sizeof(magic), &off) != sizeof(magic) ||
-        magic != FILE_MAGIC) {
-        pr_err("allowlist file invalid: %d!\n", magic);
-        goto exit;
-    }
-
-    if (kernel_read(fp, &version, sizeof(version), &off) != sizeof(version)) {
-        pr_err("allowlist read version: %d failed\n", version);
-        goto exit;
-    }
-
-    pr_info("allowlist version: %d\n", version);
-
-    while (true) {
-        struct app_profile profile;
-
-        ret = kernel_read(fp, &profile, sizeof(profile), &off);
-
-        if (ret <= 0) {
-            pr_info("load_allow_list read err: %zd\n", ret);
-            break;
-        }
-
-        pr_info("load_allow_uid, name: %s, uid: %d, allow: %d\n", profile.key,
-                profile.current_uid, profile.allow_su);
-        ksu_set_app_profile(&profile);
-    }
-
-exit:
-    ksu_show_allow_list();
-    filp_close(fp, 0);
+    pr_info("allowlist loading is now handled by ksud\n");
 }
 
 /*

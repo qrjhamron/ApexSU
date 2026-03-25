@@ -191,34 +191,34 @@ fn check_module_update_dir() -> DiagnosticCheck {
 
 /// Check the allowlist file for basic integrity.
 fn check_allowlist() -> DiagnosticCheck {
-    let allowlist_path = Path::new(defs::WORKING_DIR).join(".allowlist");
+    let allowlist_path = Path::new(defs::WORKING_DIR).join(".allowlist.enc");
     if !allowlist_path.exists() {
         return DiagnosticCheck {
             name: "allowlist".into(),
             status: CheckStatus::Warn,
-            message: "Allowlist file not found".into(),
+            message: "Encrypted allowlist file not found".into(),
             suggestion: Some(
-                "Allowlist is created on first use; this may be normal on fresh install".into(),
+                "Allowlist is created when first app is granted root".into(),
             ),
         };
     }
 
     match std::fs::metadata(&allowlist_path) {
         Ok(meta) => {
-            if meta.len() < 8 {
+            if meta.len() < 16 {
                 DiagnosticCheck {
                     name: "allowlist".into(),
                     status: CheckStatus::Warn,
-                    message: format!("Allowlist file is very small ({} bytes)", meta.len()),
+                    message: format!("Encrypted allowlist file is very small ({} bytes)", meta.len()),
                     suggestion: Some(
-                        "File may be corrupted; it should contain at least magic + version".into(),
+                        "File may be corrupted".into(),
                     ),
                 }
             } else {
                 DiagnosticCheck {
                     name: "allowlist".into(),
                     status: CheckStatus::Pass,
-                    message: format!("Allowlist file exists ({} bytes)", meta.len()),
+                    message: format!("Encrypted allowlist exists ({} bytes)", meta.len()),
                     suggestion: None,
                 }
             }
@@ -227,7 +227,7 @@ fn check_allowlist() -> DiagnosticCheck {
             name: "allowlist".into(),
             status: CheckStatus::Fail,
             message: format!("Cannot read allowlist metadata: {e}"),
-            suggestion: Some("Check file permissions on .allowlist".into()),
+            suggestion: Some("Check file permissions on .allowlist.enc".into()),
         },
     }
 }

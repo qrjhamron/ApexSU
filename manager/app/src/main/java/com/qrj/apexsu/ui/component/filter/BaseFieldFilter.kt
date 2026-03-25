@@ -15,16 +15,43 @@ open class BaseFieldFilter() {
         return TextFieldValue()
     }
 
-    protected open fun computePos(): Int {
-        // TODO
-        return 0
+    protected open fun computePos(
+        lastText: String,
+        inputTextFieldValue: TextFieldValue,
+        newText: String
+    ): Int {
+        val selection = inputTextFieldValue.selection
+        if (!selection.collapsed) {
+            return newText.length
+        }
+
+        val cursor = selection.end
+        val diff = newText.length - lastText.length
+        
+        // Basic heuristic: if text grew, move cursor forward; if shrunk, try to maintain relative position
+        var newPos = cursor + diff
+        if (newPos < 0) newPos = 0
+        if (newPos > newText.length) newPos = newText.length
+        
+        return newPos
     }
 
     protected fun getNewTextRange(
-        lastTextFiled: TextFieldValue,
+        lastTextFieldValue: TextFieldValue,
         inputTextFieldValue: TextFieldValue
     ): TextRange? {
-        return null
+        val lastText = lastTextFieldValue.text
+        val inputText = inputTextFieldValue.text
+        
+        if (lastText == inputText) return null
+        
+        // Find the start of the change
+        var start = 0
+        while (start < lastText.length && start < inputText.length && lastText[start] == inputText[start]) {
+            start++
+        }
+        
+        return TextRange(start, inputText.length)
     }
 
     protected fun getNewText(

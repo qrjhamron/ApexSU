@@ -30,6 +30,7 @@ mod feature;
 mod init_event;
 #[cfg(target_os = "android")]
 mod ksucalls;
+mod ksu_types;
 #[cfg(target_os = "android")]
 mod metamodule;
 #[cfg(target_os = "android")]

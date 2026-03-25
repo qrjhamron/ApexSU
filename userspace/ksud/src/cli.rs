@@ -334,6 +334,12 @@ enum Profile {
 
     /// list all templates
     ListTemplates,
+
+    /// Sync allowlist from kernel and encrypt it to disk
+    Sync,
+
+    /// Decrypt allowlist from disk and load it into kernel
+    Load,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -547,6 +553,8 @@ pub fn run() -> Result<()> {
             Profile::SetTemplate { id, template } => crate::profile::set_template(id, template),
             Profile::DeleteTemplate { id } => crate::profile::delete_template(id),
             Profile::ListTemplates => crate::profile::list_templates(),
+            Profile::Sync => crate::profile::sync_allowlist(),
+            Profile::Load => crate::profile::load_allowlist(),
         },
 
         Commands::Feature { command } => match command {

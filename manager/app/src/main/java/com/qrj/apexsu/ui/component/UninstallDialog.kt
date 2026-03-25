@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import com.qrj.apexsu.Natives
 import com.qrj.apexsu.R
 import com.qrj.apexsu.ui.navigation3.Navigator
 import com.qrj.apexsu.ui.navigation3.Route
@@ -38,13 +39,10 @@ fun UninstallDialog(
 ) {
     val context = LocalContext.current
     val options = listOf(
-        // TEMPORARY,
+        TEMPORARY,
         PERMANENT,
         RESTORE_STOCK_IMAGE
     )
-    val showTodo = {
-        Toast.makeText(context, "TODO", Toast.LENGTH_SHORT).show()
-    }
     val showConfirmDialog = remember(showDialog.value) { mutableStateOf(false) }
     val runType = remember(showDialog.value) { mutableStateOf<UninstallType?>(null) }
 
@@ -54,7 +52,16 @@ fun UninstallDialog(
 
             RESTORE_STOCK_IMAGE -> navigator.push(Route.Flash(FlashIt.FlashRestore))
 
-            TEMPORARY -> showTodo()
+            TEMPORARY -> {
+                Natives.setSuEnabled(false)
+                Natives.setKernelUmountEnabled(false)
+                Toast.makeText(
+                    context,
+                    R.string.settings_uninstall_temporary_message,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
             NONE -> Unit
         }
     }

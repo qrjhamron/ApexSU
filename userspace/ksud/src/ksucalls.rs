@@ -17,6 +17,11 @@ const KSU_IOCTL_GET_INFO: i32 = _IOR::<()>(K, 2);
 const KSU_IOCTL_REPORT_EVENT: i32 = _IOW::<()>(K, 3);
 const KSU_IOCTL_SET_SEPOLICY: i32 = _IOWR::<()>(K, 4);
 const KSU_IOCTL_CHECK_SAFEMODE: i32 = _IOR::<()>(K, 5);
+const KSU_IOCTL_GET_ALLOW_LIST: i32 = _IOWR::<()>(K, 6);
+const KSU_IOCTL_UID_SHOULD_UMOUNT: i32 = _IOWR::<()>(K, 9);
+const KSU_IOCTL_GET_MANAGER_APPID: i32 = _IOR::<()>(K, 10);
+const KSU_IOCTL_GET_APP_PROFILE: i32 = _IOWR::<()>(K, 11);
+const KSU_IOCTL_SET_APP_PROFILE: i32 = _IOW::<()>(K, 12);
 const KSU_IOCTL_GET_FEATURE: i32 = _IOWR::<()>(K, 13);
 const KSU_IOCTL_SET_FEATURE: i32 = _IOW::<()>(K, 14);
 const KSU_IOCTL_GET_WRAPPER_FD: i32 = _IOW::<()>(K, 15);
@@ -77,6 +82,28 @@ struct ManageMarkCmd {
     operation: u32,
     pid: i32,
     result: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetAllowListCmd {
+    pub array: *mut i32,
+    pub length: u16,
+    pub out_length: u16,
+    pub out_total: u16,
+    pub allow: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetAppProfileCmd {
+    pub profile: crate::ksu_types::AppProfile,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetAppProfileCmd {
+    pub profile: crate::ksu_types::AppProfile,
 }
 
 #[repr(C)]
@@ -293,6 +320,38 @@ pub fn mark_refresh() -> std::io::Result<()> {
         result: 0,
     };
     ksuctl(KSU_IOCTL_MANAGE_MARK, &raw mut cmd)?;
+    Ok(())
+}
+
+pub fn get_allow_list(
+    array: &mut [i32],
+    allow: bool,
+) -> std::io::Result<(u16, u16)> {
+    let mut cmd = GetAllowListCmd {
+        array: array.as_mut_ptr(),
+        length: array.len() as u16,
+        out_length: 0,
+        out_total: 0,
+        allow,
+    };
+    ksuctl(KSU_IOCTL_GET_ALLOW_LIST, &raw mut cmd)?;
+    Ok((cmd.out_length, cmd.out_total))
+}
+
+pub fn get_app_profile(uid: i32) -> std::io::Result<crate::ksu_types::AppProfile> {
+    let mut cmd = GetAppProfileCmd {
+        profile: crate::ksu_types::AppProfile {
+            current_uid: uid,
+            ..Default::default()
+        },
+    };
+    ksuctl(KSU_IOCTL_GET_APP_PROFILE, &raw mut cmd)?;
+    Ok(cmd.profile)
+}
+
+pub fn set_app_profile(profile: &crate::ksu_types::AppProfile) -> std::io::Result<()> {
+    let mut cmd = SetAppProfileCmd { profile: *profile };
+    ksuctl(KSU_IOCTL_SET_APP_PROFILE, &raw mut cmd)?;
     Ok(())
 }
 

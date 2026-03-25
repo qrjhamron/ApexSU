@@ -17,6 +17,11 @@ pub fn on_post_data_fs() -> Result<()> {
 
     utils::umask(0);
 
+    // Load encrypted allowlist from disk
+    if let Err(e) = crate::profile::load_allowlist() {
+        warn!("load encrypted allowlist failed: {e}");
+    }
+
     // Clear all temporary module configs early
     if let Err(e) = crate::module_config::clear_all_temp_configs() {
         warn!("clear temp configs failed: {e}");
