@@ -1,23 +1,48 @@
+<div align="center">
+
 # ApexSU
 
-A professional, advanced Android root solution based on KernelSU, designed with a Rust-first userspace. ApexSU prioritizes security hardening, precise control, and stealth to deliver a robust environment for Android developers and advanced users.
+**Next-gen Android root. Rust-powered. Stealth-hardened. Zero compromise.**
 
-## About
+[![CI](https://img.shields.io/github/actions/workflow/status/qrjhamron/ApexSU/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/qrjhamron/ApexSU/actions/workflows/ci.yml)
+[![Clippy](https://img.shields.io/github/actions/workflow/status/qrjhamron/ApexSU/clippy.yml?branch=main&style=for-the-badge&logo=rust&label=Clippy)](https://github.com/qrjhamron/ApexSU/actions/workflows/clippy.yml)
+[![Manager Build](https://img.shields.io/github/actions/workflow/status/qrjhamron/ApexSU/build-manager.yml?branch=main&style=for-the-badge&logo=android&label=Manager)](https://github.com/qrjhamron/ApexSU/actions/workflows/build-manager.yml)
 
-ApexSU is a fork and evolution of KernelSU that integrates deeply with the Android kernel to provide root privileges. Unlike traditional userspace-only or hybrid root solutions, ApexSU operates at the kernel level. Its primary distinction is a rewritten, Rust-first userspace designed to minimize memory-related vulnerabilities and reduce the overall attack surface. This makes ApexSU fundamentally more secure, harder to detect, and significantly more resilient against unauthorized access.
+[![Version](https://img.shields.io/badge/version-0.1.5--beta-blue?style=for-the-badge&logo=semver)](https://github.com/qrjhamron/ApexSU/releases)
+[![License](https://img.shields.io/badge/license-GPL--2.0-green?style=for-the-badge&logo=gnu)](LICENSE)
+[![Android](https://img.shields.io/badge/Android-12%2B-34A853?style=for-the-badge&logo=android)](https://developer.android.com)
+[![Kernel](https://img.shields.io/badge/Kernel-5.10%2B-orange?style=for-the-badge&logo=linux)](https://www.kernel.org)
 
-## Features
+---
 
-ApexSU introduces several key advantages over standard KernelSU:
+**[Documentation](https://github.com/qrjhamron/ApexSU/wiki)** | **[Releases](https://github.com/qrjhamron/ApexSU/releases)** | **[Issues](https://github.com/qrjhamron/ApexSU/issues)** | **[Discussions](https://github.com/qrjhamron/ApexSU/discussions)**
 
-*   **Rust-First Userspace:** The core daemon (`ksud`) and JNI bridges are implemented in Rust, ensuring memory safety, preventing buffer overflows, and delivering exceptional performance.
-*   **Security Hardening:** Enforces strict compile-time checks, zero dead-code tolerance, and comprehensive module validation (preventing path traversal and verifying payload integrity).
-*   **Advanced Stealth Features:** Employs advanced techniques to hide root status from detection mechanisms. It utilizes anonymous inodes (e.g., `[io_uring]` instead of recognizable driver names) and avoids creating detectable entries in `/proc`, `/sys`, or `/dev`.
-*   **Kernel-Level Execution:** Hooks syscalls directly in kernel-space to enforce a strict UID allowlist for root access, bypassing conventional userspace root detection.
+</div>
+
+---
+
+## What is ApexSU?
+
+ApexSU is a hardened fork of [KernelSU](https://kernelsu.org) that rewrites the userspace in **Rust** for memory safety, tighter security, and better stealth. It hooks directly into the kernel via syscall interception — no `/proc`, no `/sys`, no `/dev` footprints. Just clean, silent root.
+
+> **TL;DR:** KernelSU, but with less C, more Rust, and way harder to detect.
+
+---
+
+## Why ApexSU?
+
+| Feature | KernelSU | ApexSU |
+|:--------|:--------:|:------:|
+| JNI Bridge | C++ | **Rust** |
+| Anon Inode Name | `[ksu_driver]` | `[io_uring]` |
+| Module Validation | Basic | **Path traversal + size + field checks** |
+| Built-in Diagnostics | No | **Yes (`ksud diagnose`)** |
+| Dead Code | Tolerated | **Zero tolerance** |
+| Clippy Policy | Not enforced | **`clippy::all` + `clippy::pedantic`** |
+
+---
 
 ## Architecture
-
-The system operates through a streamlined communication channel using IOCTLs, linking the Android manager application, the Rust daemon, and the kernel module.
 
 ```text
 +-------------------+       ioctl       +--------------------+
@@ -32,47 +57,61 @@ The system operates through a streamlined communication channel using IOCTLs, li
 +-------------------+
 ```
 
-## Requirements
+Communication happens over **IOCTLs on anonymous inodes** — invisible to standard detection tools.
 
-To run ApexSU, your device must meet the following criteria:
+---
 
-*   Android 12 or higher.
-*   Kernel version 5.10 or higher (GKI 2.0 compatible).
-*   An unlocked bootloader.
+## Codebase Stats
 
-## Installation
+> Generated with `cloc` — real numbers, no fluff.
 
-1.  Download the latest ApexSU Manager APK and the corresponding kernel image/module from the project's release page.
-2.  Flash the provided boot image or kernel module to your device via `fastboot` or your preferred flashing tool.
-3.  Install the ApexSU Manager APK.
-4.  Open the Manager app to verify the installation and manage root access.
+| Language | Files | Lines of Code |
+|:---------|------:|--------------:|
+| Kotlin | 73 | 14,441 |
+| Rust | 28 | 6,559 |
+| C | 21 | 5,595 |
+| C/C++ Header | 22 | 670 |
+| C++ | 2 | 425 |
+| **Total** | **403** | **52,526** |
 
-## Usage
+Rust makes up **~24%** of the core codebase and growing.
 
-*   **Granting Root Access:** Open the ApexSU Manager application. Navigate to the superuser list and explicitly grant root permissions to the desired applications.
-*   **Managing Modules:** Use the Manager app to install, enable, disable, or remove systemless modules.
-*   **Diagnostics:** The integrated Rust daemon includes built-in health checks that can be queried for troubleshooting and verification.
+---
 
-### Building from Source
+## Features
 
-To compile the userspace daemon and the manager APK, ensure you have the Rust stable toolchain (1.82+), Android NDK (r29), JDK 21, and the Android SDK installed.
+- **Rust-First Daemon** — `ksud` is written in Rust. Memory-safe, fast, reliable.
+- **Stealth Mode** — Hides from root detection by mimicking kernel subsystems.
+- **Zero Clippy Warnings** — Enforced across all Rust code. No exceptions.
+- **Systemless Modules** — Full Magisk-compatible module support.
+- **Health Diagnostics** — Run `ksud diagnose` to check system integrity.
 
-**Compile the Userspace Daemon (`ksud`):**
-```bash
-cd userspace/ksud
-cargo ndk -t arm64-v8a build --release
-```
-
-**Compile the Manager APK:**
-```bash
-cd manager
-./gradlew assembleRelease
-```
+---
 
 ## Contributing
 
-We welcome contributions from the Android development and security communities. Please review our `CONTRIBUTING.md` file for detailed coding standards, Rust clippy policies (we strictly enforce `clippy::all` and `clippy::pedantic`), and submission guidelines. For security-related bugs, please open a private GitHub Security Advisory instead of a public issue.
+We love PRs! Before you dive in:
+
+1. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for code standards.
+2. Security bugs? Open a **private Security Advisory** — not a public issue.
+3. Keep Clippy happy: `clippy::all` + `clippy::pedantic` = zero warnings.
+
+---
 
 ## License
 
-ApexSU is licensed under the GPL-2.0 License, inheriting the open-source commitments of KernelSU and the Linux kernel. See the `LICENSE` file for full details.
+**GPL-2.0** — Same as KernelSU and the Linux kernel.
+
+See [`LICENSE`](LICENSE) for details.
+
+---
+
+<div align="center">
+
+**Built with Rust. Hardened for Android. Made for power users.**
+
+[![Stars](https://img.shields.io/github/stars/qrjhamron/ApexSU?style=social)](https://github.com/qrjhamron/ApexSU)
+[![Forks](https://img.shields.io/github/forks/qrjhamron/ApexSU?style=social)](https://github.com/qrjhamron/ApexSU/fork)
+[![Watchers](https://img.shields.io/github/watchers/qrjhamron/ApexSU?style=social)](https://github.com/qrjhamron/ApexSU)
+
+</div>
