@@ -20,16 +20,16 @@ ApexSU introduces several key advantages over standard KernelSU:
 The system operates through a streamlined communication channel using IOCTLs, linking the Android manager application, the Rust daemon, and the kernel module.
 
 ```text
-┌───────────────────┐       ioctl       ┌────────────────────┐
-│    Manager App    │ ────────────────> │   Kernel Module    │
-│  (Kotlin + Rust)  │                   │  (C, kernel-space) │
-└─────────┬─────────┘                   └────────────────────┘
-          │                                       ^
-          v                                       │
-┌───────────────────┐       ioctl                 │
-│       ksud        │ ────────────────────────────┘
-│   (Rust daemon)   │
-└───────────────────┘
++-------------------+       ioctl       +--------------------+
+|    Manager App    | ----------------> |   Kernel Module    |
+|  (Kotlin + Rust)  |                   |  (C, kernel-space) |
++---------+---------+                   +--------------------+
+          |                                       ^
+          v                                       |
++-------------------+       ioctl                 |
+|       ksud        | ----------------------------+
+|   (Rust daemon)   |
++-------------------+
 ```
 
 ## Requirements
