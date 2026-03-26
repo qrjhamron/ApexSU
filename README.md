@@ -115,3 +115,13 @@ See [`LICENSE`](LICENSE) for details.
 [![Watchers](https://img.shields.io/github/watchers/qrjhamron/ApexSU?style=social)](https://github.com/qrjhamron/ApexSU)
 
 </div>
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=qrjhamron%2FApexSU&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=qrjhamron/ApexSU&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=qrjhamron/ApexSU&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=qrjhamron/ApexSU&type=date&legend=top-left" />
+ </picture>
+</a>
