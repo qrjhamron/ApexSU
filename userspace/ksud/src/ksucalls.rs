@@ -8,7 +8,6 @@ use std::sync::OnceLock;
 
 // Event constants
 const EVENT_POST_FS_DATA: u32 = 1;
-const EVENT_BOOT_COMPLETED: u32 = 2;
 const EVENT_MODULE_MOUNTED: u32 = 3;
 
 const K: u32 = b'K' as u32;
@@ -18,8 +17,6 @@ const KSU_IOCTL_REPORT_EVENT: i32 = _IOW::<()>(K, 3);
 const KSU_IOCTL_SET_SEPOLICY: i32 = _IOWR::<()>(K, 4);
 const KSU_IOCTL_CHECK_SAFEMODE: i32 = _IOR::<()>(K, 5);
 const KSU_IOCTL_GET_ALLOW_LIST: i32 = _IOWR::<()>(K, 6);
-const KSU_IOCTL_UID_SHOULD_UMOUNT: i32 = _IOWR::<()>(K, 9);
-const KSU_IOCTL_GET_MANAGER_APPID: i32 = _IOR::<()>(K, 10);
 const KSU_IOCTL_GET_APP_PROFILE: i32 = _IOWR::<()>(K, 11);
 const KSU_IOCTL_SET_APP_PROFILE: i32 = _IOW::<()>(K, 12);
 const KSU_IOCTL_GET_FEATURE: i32 = _IOWR::<()>(K, 13);
@@ -228,10 +225,6 @@ fn report_event(event: u32) {
 
 pub fn report_post_fs_data() {
     report_event(EVENT_POST_FS_DATA);
-}
-
-pub fn report_boot_complete() {
-    report_event(EVENT_BOOT_COMPLETED);
 }
 
 pub fn report_module_mounted() {

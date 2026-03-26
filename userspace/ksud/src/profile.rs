@@ -5,7 +5,7 @@ use crate::{defs, ksucalls, sepolicy};
 use anyhow::{Context, Result, anyhow};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::Path;
 
 const ALLOWLIST_ENC_PATH: &str = "/data/adb/ksu/.allowlist.enc";
@@ -34,18 +34,18 @@ fn get_key() -> Result<[u8; 32]> {
 pub fn sync_allowlist() -> Result<()> {
     let mut uids = [0i32; 1024];
     // Get UIDs granted root
-    let (len, total) = ksucalls::get_allow_list(&mut uids, true)?;
+    let (len, _) = ksucalls::get_allow_list(&mut uids, true)?;
     let mut profiles = Vec::new();
 
-    for i in 0..len as usize {
-        let profile = ksucalls::get_app_profile(uids[i])?;
+    for uid in uids.iter().take(len as usize) {
+        let profile = ksucalls::get_app_profile(*uid)?;
         profiles.push(profile);
     }
 
     // Also get UIDs with custom profiles but no root (deny list with profiles)
     let (len_deny, _) = ksucalls::get_allow_list(&mut uids, false)?;
-    for i in 0..len_deny as usize {
-        let profile = ksucalls::get_app_profile(uids[i])?;
+    for uid in uids.iter().take(len_deny as usize) {
+        let profile = ksucalls::get_app_profile(*uid)?;
         // Only sync if it's not a default profile (i.e., has custom settings)
         // For simplicity, we sync all retrieved ones for now.
         profiles.push(profile);
@@ -103,8 +103,16 @@ pub fn load_allowlist() -> Result<()> {
         let start = i * profile_size;
         let end = start + profile_size;
         let profile_bytes = &data[start..end];
-        let profile: crate::ksu_types::AppProfile =
-            unsafe { std::ptr::read(profile_bytes.as_ptr() as *const _) };
+        // SAFETY: profile_bytes is exactly `size_of::<AppProfile>()` bytes long.
+        // We read with `read_unaligned` because decrypted byte buffers are not guaranteed
+        // to satisfy `AppProfile` alignment requirements.
+        let profile: crate::ksu_types::AppProfile = unsafe {
+            std::ptr::read_unaligned(
+                profile_bytes
+                    .as_ptr()
+                    .cast::<crate::ksu_types::AppProfile>(),
+            )
+        };
         ksucalls::set_app_profile(&profile)?;
     }
 
