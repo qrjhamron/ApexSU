@@ -120,9 +120,9 @@ pub fn on_post_data_fs() -> Result<()> {
     std::env::set_current_dir("/").with_context(|| "failed to chdir to /")?;
 
     Ok(())
-    }
+}
 
-    fn run_stage(stage: &str, block: bool, timeout_sec: u32) {
+fn run_stage(stage: &str, block: bool, timeout_sec: u32) {
     utils::umask(0);
 
     if utils::has_magisk() {
@@ -148,12 +148,12 @@ pub fn on_post_data_fs() -> Result<()> {
     if let Err(e) = crate::module::exec_stage_script(stage, block, timeout_sec) {
         warn!("Failed to exec {stage} scripts: {e}");
     }
-    }
+}
 
-    /// Handle the services init stage: run service.sh scripts for all modules.
-    pub fn on_services() {
+/// Handle the services init stage: run service.sh scripts for all modules.
+pub fn on_services() {
     run_stage("service", false, 0);
-    }
+}
 
 /// Handle the boot-completed init stage: run boot-completed.sh scripts for all modules.
 pub fn on_boot_completed() {

@@ -226,7 +226,10 @@ pub fn exec_script<T: AsRef<Path>>(path: T, wait: bool, timeout_sec: u32) -> Res
             .arg(format!("{timeout_sec}s"));
     }
 
-    command = command.arg("sh").arg(path.as_ref()).envs(get_common_script_envs());
+    command = command
+        .arg("sh")
+        .arg(path.as_ref())
+        .envs(get_common_script_envs());
 
     // Set KSU_MODULE environment variable if module_id was validated successfully
     if let Some(id) = validated_module_id {

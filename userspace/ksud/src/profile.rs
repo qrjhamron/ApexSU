@@ -2,7 +2,7 @@
 
 use crate::utils::ensure_dir_exists;
 use crate::{defs, ksucalls, sepolicy};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
 use std::io::{Read, Write};
@@ -52,16 +52,15 @@ pub fn sync_allowlist() -> Result<()> {
     }
 
     // Also sync default profiles (key "$" and "#")
-    // In kernel these are cached separately. 
-    // We can try to get them via key if get_app_profile supported it by key, 
-    // but current ioctl is by UID. 
+    // In kernel these are cached separately.
+    // We can try to get them via key if get_app_profile supported it by key,
+    // but current ioctl is by UID.
     // Let's stick to UIDs for now.
 
     let mut data = Vec::new();
     for profile in profiles {
-        let bytes: [u8; std::mem::size_of::<crate::ksu_types::AppProfile>()] = unsafe {
-            std::mem::transmute(profile)
-        };
+        let bytes: [u8; std::mem::size_of::<crate::ksu_types::AppProfile>()] =
+            unsafe { std::mem::transmute(profile) };
         data.extend_from_slice(&bytes);
     }
 
@@ -104,9 +103,8 @@ pub fn load_allowlist() -> Result<()> {
         let start = i * profile_size;
         let end = start + profile_size;
         let profile_bytes = &data[start..end];
-        let profile: crate::ksu_types::AppProfile = unsafe {
-            std::ptr::read(profile_bytes.as_ptr() as *const _)
-        };
+        let profile: crate::ksu_types::AppProfile =
+            unsafe { std::ptr::read(profile_bytes.as_ptr() as *const _) };
         ksucalls::set_app_profile(&profile)?;
     }
 

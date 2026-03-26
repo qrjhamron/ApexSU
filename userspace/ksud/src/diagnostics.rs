@@ -197,9 +197,7 @@ fn check_allowlist() -> DiagnosticCheck {
             name: "allowlist".into(),
             status: CheckStatus::Warn,
             message: "Encrypted allowlist file not found".into(),
-            suggestion: Some(
-                "Allowlist is created when first app is granted root".into(),
-            ),
+            suggestion: Some("Allowlist is created when first app is granted root".into()),
         };
     }
 
@@ -209,10 +207,11 @@ fn check_allowlist() -> DiagnosticCheck {
                 DiagnosticCheck {
                     name: "allowlist".into(),
                     status: CheckStatus::Warn,
-                    message: format!("Encrypted allowlist file is very small ({} bytes)", meta.len()),
-                    suggestion: Some(
-                        "File may be corrupted".into(),
+                    message: format!(
+                        "Encrypted allowlist file is very small ({} bytes)",
+                        meta.len()
                     ),
+                    suggestion: Some("File may be corrupted".into()),
                 }
             } else {
                 DiagnosticCheck {

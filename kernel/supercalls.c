@@ -554,8 +554,8 @@ static int add_try_umount(void __user *arg)
     }
 
     case KSU_UMOUNT_ADD: {
-        long len = strncpy_from_user(buf, (const char __user *)cmd.arg,
-                                        sizeof(buf));
+        long len =
+            strncpy_from_user(buf, (const char __user *)cmd.arg, sizeof(buf));
         if (len <= 0)
             return -EFAULT;
 
@@ -816,8 +816,8 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd,
             // Check permission first
             if (ksu_ioctl_handlers[i].perm_check &&
                 !ksu_ioctl_handlers[i].perm_check()) {
-                pr_warn("ioctl: permission denied for cmd=0x%x uid=%d\n",
-                        cmd, current_uid().val);
+                pr_warn("ioctl: permission denied for cmd=0x%x uid=%d\n", cmd,
+                        current_uid().val);
                 return -EPERM;
             }
             // Execute handler

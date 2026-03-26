@@ -323,10 +323,7 @@ pub fn mark_refresh() -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn get_allow_list(
-    array: &mut [i32],
-    allow: bool,
-) -> std::io::Result<(u16, u16)> {
+pub fn get_allow_list(array: &mut [i32], allow: bool) -> std::io::Result<(u16, u16)> {
     let mut cmd = GetAllowListCmd {
         array: array.as_mut_ptr(),
         length: array.len() as u16,

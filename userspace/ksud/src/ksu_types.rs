@@ -1,4 +1,3 @@
-
 pub const KSU_MAX_PACKAGE_NAME: usize = 256;
 pub const KSU_APP_PROFILE_VER: u32 = 2;
 pub const KSU_MAX_GROUPS: usize = 32;

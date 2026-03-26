@@ -28,9 +28,9 @@ mod diagnostics;
 mod feature;
 #[cfg(target_os = "android")]
 mod init_event;
+mod ksu_types;
 #[cfg(target_os = "android")]
 mod ksucalls;
-mod ksu_types;
 #[cfg(target_os = "android")]
 mod metamodule;
 #[cfg(target_os = "android")]

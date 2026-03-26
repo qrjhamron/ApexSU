@@ -10,6 +10,7 @@
 #include <linux/gfp.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
+#include <linux/kmod.h>
 #include <linux/printk.h>
 #include <linux/slab.h>
 #include <linux/types.h>
