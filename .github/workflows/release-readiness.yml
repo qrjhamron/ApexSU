@@ -1,0 +1,50 @@
+name: Release Readiness
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  host-smoke:
+    name: Host Smoke (weak evidence)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Host smoke tests
+        run: |
+          cargo test --manifest-path userspace/ksud/Cargo.toml --locked
+          cargo test --manifest-path userspace/ksuinit/Cargo.toml --locked
+          cargo test --manifest-path kernel/rust/abi_checker/Cargo.toml --locked
+
+  android-toolchain-prereqs:
+    name: Android/GKI Toolchain Prerequisites
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_GKI_OUT: ${{ vars.ANDROID_GKI_OUT }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Android NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ndk;29.0.13846066
+      - name: Export NDK path
+        run: |
+          NDK_PATH=$(find "$ANDROID_HOME/ndk" -maxdepth 1 -mindepth 1 -type d | sort | tail -n1)
+          test -n "$NDK_PATH" || { echo "Android NDK path not found under $ANDROID_HOME/ndk"; exit 1; }
+          echo "ANDROID_NDK_HOME=$NDK_PATH" >> "$GITHUB_ENV"
+      - name: Check required toolchain presence
+        run: scripts/release/check_toolchain_prereqs.sh
+
+  release-evidence:
+    name: Release Evidence Gate
+    runs-on: ubuntu-latest
+    needs:
+      - host-smoke
+      - android-toolchain-prereqs
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download release artifacts
+        uses: actions/download-artifact@v7
+      - name: Enforce release evidence
+        run: scripts/release/check_release_readiness.sh

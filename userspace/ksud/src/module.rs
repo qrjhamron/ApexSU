@@ -4,6 +4,11 @@
 use crate::utils::*;
 use crate::{
     assets, defs, ksucalls, metamodule, module_validator,
+    module_lifecycle::{
+        PreservedFlags, cleanup_staged_dir, finalize_successful_promotion,
+        is_valid_active_module_id, mark_install_complete, promote_staged_module,
+        run_staging_transaction, should_promote_staged_module,
+    },
     restorecon::{restore_syscon, setsyscon},
     sepolicy,
 };
@@ -14,7 +19,7 @@ use is_executable::is_executable;
 use java_properties::PropertiesIter;
 use log::{debug, info, warn};
 
-use std::fs::{copy, rename};
+use std::fs::copy;
 use std::{
     collections::HashMap,
     env::var as env_var,
@@ -120,13 +125,28 @@ pub fn foreach_module(
             continue;
         }
 
-        if module_type == Active && path.join(defs::DISABLE_FILE_NAME).exists() {
-            info!("{} is disabled, skip", path.display());
-            continue;
-        }
-        if module_type == Active && path.join(defs::REMOVE_FILE_NAME).exists() {
-            warn!("{} is removed, skip", path.display());
-            continue;
+        if module_type == Active {
+            let Some(name) = entry.file_name().to_str().map(ToString::to_string) else {
+                warn!(
+                    "Active module directory has non-utf8 name, skip: {}",
+                    path.display()
+                );
+                continue;
+            };
+
+            if !is_valid_active_module_id(&name) {
+                warn!("Skipping invalid/internal module directory: {}", path.display());
+                continue;
+            }
+
+            if path.join(defs::DISABLE_FILE_NAME).exists() {
+                info!("{} is disabled, skip", path.display());
+                continue;
+            }
+            if path.join(defs::REMOVE_FILE_NAME).exists() {
+                warn!("{} is removed, skip", path.display());
+                continue;
+            }
         }
 
         f(&path)?;
@@ -384,25 +404,61 @@ pub fn handle_updated_modules() -> Result<()> {
 
         if let Some(name) = updated_module.file_name() {
             let module_dir = modules_root.join(name);
-            let mut disabled = false;
-            let mut removed = false;
-            if module_dir.exists() {
-                // If the old module is disabled, we need to also disable the new one
-                disabled = module_dir.join(defs::DISABLE_FILE_NAME).exists();
-                removed = module_dir.join(defs::REMOVE_FILE_NAME).exists();
-                remove_dir_all(&module_dir)?;
+            let Some(module_id) = name.to_str() else {
+                warn!(
+                    "Updated module directory has non-utf8 name, deleting staged dir: {}",
+                    updated_module.display()
+                );
+                cleanup_staged_dir(updated_module)?;
+                return Ok(());
+            };
+
+            if validate_module_id(module_id).is_err() {
+                warn!(
+                    "Updated module id is invalid, deleting staged dir: {}",
+                    updated_module.display()
+                );
+                cleanup_staged_dir(updated_module)?;
+                return Ok(());
             }
-            rename(updated_module, &module_dir)?;
-            if removed {
-                let path = module_dir.join(defs::REMOVE_FILE_NAME);
-                if let Err(e) = ensure_file_exists(&path) {
-                    warn!("Failed to create {}: {e}", path.display());
+
+            if !should_promote_staged_module(updated_module) {
+                warn!(
+                    "Skipping staged module without success marker: {}",
+                    updated_module.display()
+                );
+                cleanup_staged_dir(updated_module)?;
+                return Ok(());
+            }
+
+            let preserved_flags = PreservedFlags {
+                disabled: module_dir.join(defs::DISABLE_FILE_NAME).exists(),
+                removed: module_dir.join(defs::REMOVE_FILE_NAME).exists(),
+            };
+
+            let backup = promote_staged_module(updated_module, &module_dir)?;
+            if let Err(e) = finalize_successful_promotion(
+                &module_dir,
+                backup,
+                preserved_flags,
+                defs::DISABLE_FILE_NAME,
+                defs::REMOVE_FILE_NAME,
+            ) {
+                let disable_marker = module_dir.join(defs::DISABLE_FILE_NAME);
+                if let Err(disable_err) = ensure_file_exists(&disable_marker) {
+                    warn!(
+                        "Failed to place fail-closed disable marker after promotion finalization error for {}: {disable_err:#}",
+                        module_dir.display()
+                    );
                 }
-            } else if disabled {
-                let path = module_dir.join(defs::DISABLE_FILE_NAME);
-                if let Err(e) = ensure_file_exists(&path) {
-                    warn!("Failed to create {}: {e}", path.display());
-                }
+                warn!(
+                    "Promotion completed but post-promotion cleanup/flags failed for {}: {e:#}",
+                    module_dir.display()
+                );
+                return Err(anyhow!(
+                    "Fail-closed promotion finalization error for {}: {e:#}",
+                    module_dir.display()
+                ));
             }
         }
         Ok(())
@@ -536,42 +592,47 @@ fn install_module_to_system(zip: &str) -> Result<()> {
     ensure_dir_exists(defs::MODULE_UPDATE_DIR)?;
     setsyscon(defs::MODULE_UPDATE_DIR)?;
 
-    // Prepare target directory
-    println!("- Installing to {}", updated_dir.display());
-    ensure_clean_dir(&updated_dir)?;
-    info!("target dir: {}", updated_dir.display());
+    run_staging_transaction(&updated_dir, || {
+        // Prepare target directory
+        println!("- Installing to {}", updated_dir.display());
+        ensure_clean_dir(&updated_dir)?;
+        info!("target dir: {}", updated_dir.display());
 
-    // Extract zip to target directory using a confinement-enforcing extractor.
-    println!("- Extracting module files");
-    let file = File::open(zip)?;
-    let mut archive = zip::ZipArchive::new(file)?;
-    extract_zip_secure(&mut archive, &updated_dir)?;
+        // Extract zip to target directory using a confinement-enforcing extractor.
+        println!("- Extracting module files");
+        let file = File::open(zip)?;
+        let mut archive = zip::ZipArchive::new(file)?;
+        extract_zip_secure(&mut archive, &updated_dir)?;
 
-    // Set permission and selinux context for $MOD/system
-    let module_system_dir = updated_dir.join("system");
-    if module_system_dir.exists() {
-        #[cfg(unix)]
-        set_permissions(&module_system_dir, Permissions::from_mode(0o755))?;
-        restore_syscon(&module_system_dir)?;
-    }
+        // Set permission and selinux context for $MOD/system
+        let module_system_dir = updated_dir.join("system");
+        if module_system_dir.exists() {
+            #[cfg(unix)]
+            set_permissions(&module_system_dir, Permissions::from_mode(0o755))?;
+            restore_syscon(&module_system_dir)?;
+        }
 
-    // Execute install script
-    println!("- Running module installer");
-    exec_install_script(zip, is_metamodule)?;
+        // Execute install script
+        println!("- Running module installer");
+        exec_install_script(zip, is_metamodule)?;
 
-    let module_dir = Path::new(MODULE_DIR).join(module_id);
-    ensure_dir_exists(&module_dir)?;
-    copy(
-        updated_dir.join("module.prop"),
-        module_dir.join("module.prop"),
-    )?;
-    ensure_file_exists(module_dir.join(UPDATE_FILE_NAME))?;
+        let module_dir = Path::new(MODULE_DIR).join(module_id);
+        ensure_dir_exists(&module_dir)?;
+        copy(
+            updated_dir.join("module.prop"),
+            module_dir.join("module.prop"),
+        )?;
+        ensure_file_exists(module_dir.join(UPDATE_FILE_NAME))?;
 
-    // Create symlink for metamodule
-    if is_metamodule {
-        println!("- Creating metamodule symlink");
-        metamodule::ensure_symlink(&module_dir)?;
-    }
+        // Create symlink for metamodule
+        if is_metamodule {
+            println!("- Creating metamodule symlink");
+            metamodule::ensure_symlink(&module_dir)?;
+        }
+
+        mark_install_complete(&updated_dir)?;
+        Ok(())
+    })?;
 
     println!("- Module installed successfully!");
     info!("Module {module_id} installed successfully!");

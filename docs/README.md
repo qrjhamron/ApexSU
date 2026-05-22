@@ -7,6 +7,7 @@ This directory contains project documentation for ApexSU.
 - [Repository README](../README.md): project overview and current status.
 - [Architecture](./ARCHITECTURE.md): component boundaries and data flow.
 - [Early Tester Program](./TESTERS.md): draft tester requirements and reporting format.
+- [Release Gates](./release/RELEASE_GATES.md): required host vs Android/GKI evidence model and release blockers.
 - [Security Policy](../SECURITY.md): disclosure process and contact information.
 
 ## Note on Legacy Content

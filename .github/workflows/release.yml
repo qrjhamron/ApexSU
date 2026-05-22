@@ -14,9 +14,15 @@ jobs:
   build-manager:
     uses: ./.github/workflows/build-manager.yml
     secrets: inherit
+  release-readiness:
+    needs:
+      - build-manager
+    uses: ./.github/workflows/release-readiness.yml
+    secrets: inherit
   release:
     needs:
       - build-manager
+      - release-readiness
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts

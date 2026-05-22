@@ -62,6 +62,10 @@ Minimum evidence to record:
 
 Until that target build passes, host builds are not release proof.
 
+Release decisions must also pass `scripts/release/check_release_readiness.sh`,
+which enforces explicit Android/GKI/KUnit/runtime evidence in
+`docs/release/RELEASE_EVIDENCE.md`.
+
 ## KUnit
 
 KUnit tests in this repository are compile-gated with `CONFIG_KUNIT`. They are
