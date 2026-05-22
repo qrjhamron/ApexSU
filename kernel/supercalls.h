@@ -11,6 +11,11 @@
 #define KSU_INSTALL_MAGIC2 0xCAFEBABE
 
 // Command structures for ioctl
+// ABI contract note:
+// - userspace and kernel must keep these layouts byte-identical.
+// - New callers should prefer KSU_IOCTL_NEW_GET_ALLOW_LIST / _DENY_LIST.
+// - KSU_IOCTL_GET_ALLOW_LIST / _DENY_LIST remain deprecated compatibility paths.
+#define KSU_IOCTL_ABI_VERSION 1
 
 struct ksu_become_daemon_cmd {
     __u8 token[65]; // Input: daemon token (null-terminated)
@@ -82,7 +87,7 @@ struct ksu_set_feature_cmd {
 };
 
 struct ksu_get_wrapper_fd_cmd {
-    __u32 fd; // Input: userspace fd
+    __s32 fd; // Input: userspace fd
     __u32 flags; // Input: flags of userspace fd
 };
 

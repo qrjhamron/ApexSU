@@ -237,6 +237,41 @@ private fun HandleWebUIEvent(webUIState: WebUIState) {
             }
         }
 
+        is WebUIEvent.ShowPrivilegedConfirm -> {
+            val showDialog = remember(event) { mutableStateOf(true) }
+            WindowDialog(
+                onDismissRequest = { webUIState.onPrivilegedConfirmResult(false) },
+                show = showDialog,
+            ) {
+                Column {
+                    Text(event.message)
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(
+                            onClick = {
+                                webUIState.onPrivilegedConfirmResult(false)
+                                showDialog.value = false
+                            },
+                            text = stringResource(android.R.string.cancel),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(modifier = Modifier.width(20.dp))
+                        TextButton(
+                            onClick = {
+                                webUIState.onPrivilegedConfirmResult(true)
+                                showDialog.value = false
+                            },
+                            text = stringResource(R.string.confirm),
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.textButtonColorsPrimary()
+                        )
+                    }
+                }
+            }
+        }
+
         else -> {}
     }
 }

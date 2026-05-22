@@ -18,12 +18,14 @@
 #include <linux/namei.h>
 #include <linux/workqueue.h>
 #include <linux/uio.h>
+#include <linux/mutex.h>
 
 #include "manager.h"
 #include "allowlist.h"
 #include "arch.h"
 #include "klog.h" // IWYU pragma: keep
 #include "ksud.h"
+#include "ksu.h"
 #include "util.h"
 #include "selinux/selinux.h"
 #include "throne_tracker.h"
@@ -62,6 +64,13 @@ static void stop_input_hook();
 static struct work_struct stop_init_rc_hook_work;
 static struct work_struct stop_execve_hook_work;
 static struct work_struct stop_input_hook_work;
+static DEFINE_MUTEX(ksud_hook_lock);
+static bool stop_work_initialized;
+static bool execve_kp_registered;
+static bool sys_read_kp_registered;
+static bool sys_fstat_kp_registered;
+static bool input_event_kp_registered;
+static atomic_t input_hook_stopped = ATOMIC_INIT(0);
 
 void on_post_fs_data(void)
 {
@@ -72,7 +81,9 @@ void on_post_fs_data(void)
     }
     pr_info("on_post_fs_data!\n");
 
-    ksu_observer_init();
+    if (ksu_observer_init()) {
+        pr_warn("observer init failed in post-fs-data\n");
+    }
     // sanity check, this may influence the performance
     stop_input_hook();
 }
@@ -184,6 +195,7 @@ static int __maybe_unused count(struct user_arg_ptr argv, int max)
 static void on_post_fs_data_cbfun(struct callback_head *cb)
 {
     on_post_fs_data();
+    ksu_task_work_complete();
 }
 
 static struct callback_head on_post_fs_data_cb = { .func =
@@ -233,7 +245,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
     struct filename *filename;
 
     static const char app_process[] = "/system/bin/app_process";
-    static bool first_zygote = true;
+    static atomic_t first_zygote = ATOMIC_INIT(1);
 
     /* This applies to versions Android 10+ */
     static const char system_bin_init[] = "/system/bin/init";
@@ -262,21 +274,41 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
         }
     }
 
-    if (unlikely(
-            first_zygote &&
-            !memcmp(filename->name, app_process, sizeof(app_process) - 1) &&
-            argv)) {
+    if (unlikely(atomic_read(&first_zygote) &&
+                 !memcmp(filename->name, app_process,
+                         sizeof(app_process) - 1) &&
+                 argv)) {
         char buf[16];
         if (check_argv(*argv, 1, "-Xzygote", buf, sizeof(buf))) {
+            int ret = -ESRCH;
+
+            if (atomic_cmpxchg(&first_zygote, 1, 0) != 1)
+                return 0;
+
             pr_info("exec zygote, /data prepared, second_stage: %d\n",
                     atomic_read(&init_second_stage_done));
             rcu_read_lock();
             struct task_struct *init_task =
                 rcu_dereference(current->real_parent);
+            if (!ksu_task_work_prepare_enqueue()) {
+                pr_warn("skip post-fs-data task_work while module is shutting down\n");
+                atomic_set(&first_zygote, 1);
+                rcu_read_unlock();
+                return 0;
+            }
+
             if (init_task)
-                task_work_add(init_task, &on_post_fs_data_cb, TWA_RESUME);
+                ret = task_work_add(init_task, &on_post_fs_data_cb,
+                                    TWA_RESUME);
             rcu_read_unlock();
-            first_zygote = false;
+
+            if (ret) {
+                ksu_task_work_complete();
+                pr_err("failed to queue post-fs-data task work: %d\n", ret);
+                atomic_set(&first_zygote, 1);
+                return 0;
+            }
+
             stop_execve_hook();
         }
     }
@@ -611,35 +643,58 @@ static struct kprobe input_event_kp = {
 
 static void do_stop_init_rc_hook(struct work_struct *work)
 {
-    unregister_kprobe(&sys_read_kp);
-    unregister_kretprobe(&sys_fstat_kp);
+    mutex_lock(&ksud_hook_lock);
+    if (sys_read_kp_registered) {
+        unregister_kprobe(&sys_read_kp);
+        sys_read_kp_registered = false;
+    }
+    if (sys_fstat_kp_registered) {
+        unregister_kretprobe(&sys_fstat_kp);
+        sys_fstat_kp_registered = false;
+    }
+    mutex_unlock(&ksud_hook_lock);
 }
 
 static void do_stop_execve_hook(struct work_struct *work)
 {
-    unregister_kprobe(&execve_kp);
+    mutex_lock(&ksud_hook_lock);
+    if (execve_kp_registered) {
+        unregister_kprobe(&execve_kp);
+        execve_kp_registered = false;
+    }
+    mutex_unlock(&ksud_hook_lock);
 }
 
 static void do_stop_input_hook(struct work_struct *work)
 {
-    unregister_kprobe(&input_event_kp);
+    mutex_lock(&ksud_hook_lock);
+    if (input_event_kp_registered) {
+        unregister_kprobe(&input_event_kp);
+        input_event_kp_registered = false;
+    }
+    mutex_unlock(&ksud_hook_lock);
 }
 
 static void stop_init_rc_hook()
 {
+    if (!READ_ONCE(stop_work_initialized))
+        return;
     bool ret = schedule_work(&stop_init_rc_hook_work);
     pr_info("unregister init_rc_hook kprobe: %d!\n", ret);
 }
 
 static void stop_execve_hook()
 {
+    if (!READ_ONCE(stop_work_initialized))
+        return;
     bool ret = schedule_work(&stop_execve_hook_work);
     pr_info("unregister execve kprobe: %d!\n", ret);
 }
 
 static void stop_input_hook()
 {
-    static atomic_t input_hook_stopped = ATOMIC_INIT(0);
+    if (!READ_ONCE(stop_work_initialized))
+        return;
     if (atomic_cmpxchg(&input_hook_stopped, 0, 1) != 0) {
         return;
     }
@@ -647,32 +702,106 @@ static void stop_input_hook()
     pr_info("unregister input kprobe: %d!\n", ret);
 }
 
+static void ksu_ksud_unregister_all_locked(void)
+{
+    if (input_event_kp_registered) {
+        unregister_kprobe(&input_event_kp);
+        input_event_kp_registered = false;
+    }
+
+    if (sys_fstat_kp_registered) {
+        unregister_kretprobe(&sys_fstat_kp);
+        sys_fstat_kp_registered = false;
+    }
+
+    if (sys_read_kp_registered) {
+        unregister_kprobe(&sys_read_kp);
+        sys_read_kp_registered = false;
+    }
+
+    if (execve_kp_registered) {
+        unregister_kprobe(&execve_kp);
+        execve_kp_registered = false;
+    }
+}
+
+static void ksu_ksud_unregister_all(void)
+{
+    mutex_lock(&ksud_hook_lock);
+    ksu_ksud_unregister_all_locked();
+    mutex_unlock(&ksud_hook_lock);
+}
+
 // ksud: module support
-void ksu_ksud_init()
+int ksu_ksud_init(void)
 {
     int ret;
-
-    ret = register_kprobe(&execve_kp);
-    pr_info("ksud: execve_kp: %d\n", ret);
-
-    ret = register_kprobe(&sys_read_kp);
-    pr_info("ksud: sys_read_kp: %d\n", ret);
-
-    ret = register_kretprobe(&sys_fstat_kp);
-    pr_info("ksud: sys_fstat_kp: %d\n", ret);
-
-    ret = register_kprobe(&input_event_kp);
-    pr_info("ksud: input_event_kp: %d\n", ret);
+    int stage = 0;
 
     INIT_WORK(&stop_init_rc_hook_work, do_stop_init_rc_hook);
     INIT_WORK(&stop_execve_hook_work, do_stop_execve_hook);
     INIT_WORK(&stop_input_hook_work, do_stop_input_hook);
+    WRITE_ONCE(stop_work_initialized, true);
+    atomic_set(&input_hook_stopped, 0);
+    ksu_rc_pos = 0;
+
+    ret = register_kprobe(&execve_kp);
+    pr_info("ksud: execve_kp: %d\n", ret);
+    if (ret)
+        goto fail;
+    mutex_lock(&ksud_hook_lock);
+    execve_kp_registered = true;
+    mutex_unlock(&ksud_hook_lock);
+    stage = 1;
+
+    ret = register_kprobe(&sys_read_kp);
+    pr_info("ksud: sys_read_kp: %d\n", ret);
+    if (ret)
+        goto fail;
+    mutex_lock(&ksud_hook_lock);
+    sys_read_kp_registered = true;
+    mutex_unlock(&ksud_hook_lock);
+    stage = 2;
+
+    ret = register_kretprobe(&sys_fstat_kp);
+    pr_info("ksud: sys_fstat_kp: %d\n", ret);
+    if (ret)
+        goto fail;
+    mutex_lock(&ksud_hook_lock);
+    sys_fstat_kp_registered = true;
+    mutex_unlock(&ksud_hook_lock);
+    stage = 3;
+
+    ret = register_kprobe(&input_event_kp);
+    pr_info("ksud: input_event_kp: %d\n", ret);
+    if (ret)
+        goto fail;
+    mutex_lock(&ksud_hook_lock);
+    input_event_kp_registered = true;
+    mutex_unlock(&ksud_hook_lock);
+    return 0;
+
+fail:
+    pr_err("ksud init failed at stage %d, rolling back hooks: %d\n", stage,
+           ret);
+    cancel_work_sync(&stop_input_hook_work);
+    cancel_work_sync(&stop_execve_hook_work);
+    cancel_work_sync(&stop_init_rc_hook_work);
+    ksu_ksud_unregister_all();
+    WRITE_ONCE(stop_work_initialized, false);
+    atomic_set(&input_hook_stopped, 0);
+    return ret;
 }
 
 void ksu_ksud_exit()
 {
-    unregister_kprobe(&execve_kp);
-    // this should be done before unregister sys_read_kp
-    // unregister_kprobe(&sys_read_kp);
-    unregister_kprobe(&input_event_kp);
+    if (!READ_ONCE(stop_work_initialized))
+        return;
+
+    cancel_work_sync(&stop_input_hook_work);
+    cancel_work_sync(&stop_execve_hook_work);
+    cancel_work_sync(&stop_init_rc_hook_work);
+    ksu_ksud_unregister_all();
+    WRITE_ONCE(stop_work_initialized, false);
+    atomic_set(&input_hook_stopped, 0);
 }

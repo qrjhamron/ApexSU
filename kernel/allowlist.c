@@ -16,6 +16,9 @@
 #include <linux/types.h>
 #include <linux/version.h>
 #include <linux/compiler_types.h>
+#if IS_ENABLED(CONFIG_KUNIT)
+#include <kunit/test.h>
+#endif
 
 #include "klog.h" // IWYU pragma: keep
 #include "ksud.h"
@@ -75,6 +78,20 @@ static void init_default_profiles()
     default_non_root_profile.umount_modules = true;
 }
 
+static void read_default_root_profile(struct root_profile *out)
+{
+    mutex_lock(&allowlist_mutex);
+    memcpy(out, &default_root_profile, sizeof(*out));
+    mutex_unlock(&allowlist_mutex);
+}
+
+static void read_default_non_root_profile(struct non_root_profile *out)
+{
+    mutex_lock(&allowlist_mutex);
+    memcpy(out, &default_non_root_profile, sizeof(*out));
+    mutex_unlock(&allowlist_mutex);
+}
+
 struct perm_data {
     struct list_head list;
     struct rcu_head rcu;
@@ -118,25 +135,85 @@ static void ksu_grant_root_to_shell()
 }
 #endif
 
+static ssize_t validate_fixed_cstr(const char *field, size_t size);
+static int profile_valid(struct app_profile *profile);
+static bool is_special_profile_key(const char *key);
+
 bool ksu_get_app_profile(struct app_profile *profile)
 {
     struct perm_data *p = NULL;
     bool found = false;
+    bool duplicate = false;
 
     rcu_read_lock();
     list_for_each_entry_rcu (p, &allow_list, list) {
         bool uid_match = profile->current_uid == p->profile.current_uid;
-        if (uid_match) {
-            // found it, override it with ours
-            memcpy(profile, &p->profile, sizeof(*profile));
-            found = true;
-            goto exit;
+        if (!uid_match || is_special_profile_key(p->profile.key))
+            continue;
+
+        if (profile_valid(&p->profile)) {
+            pr_err("stored app profile for uid %d is invalid\n",
+                   p->profile.current_uid);
+            continue;
         }
+
+        if (found) {
+            duplicate = true;
+            break;
+        }
+
+        // found it, override it with ours
+        memcpy(profile, &p->profile, sizeof(*profile));
+        found = true;
     }
 
-exit:
+    if (duplicate) {
+        pr_warn("duplicate profiles for uid %d, refusing profile lookup\n",
+                profile->current_uid);
+        found = false;
+    }
+
     rcu_read_unlock();
     return found;
+}
+
+static bool find_unique_uid_profile(uid_t uid, struct app_profile *profile)
+{
+    struct perm_data *p = NULL;
+    bool found = false;
+    bool duplicate = false;
+    bool allow_su = false;
+
+    rcu_read_lock();
+    list_for_each_entry_rcu (p, &allow_list, list) {
+        if (uid != p->profile.current_uid ||
+            is_special_profile_key(p->profile.key))
+            continue;
+
+        if (profile_valid(&p->profile)) {
+            pr_err("stored app profile for uid %d is invalid\n",
+                   p->profile.current_uid);
+            continue;
+        }
+
+        if (found) {
+            duplicate = true;
+            break;
+        }
+
+        if (profile)
+            memcpy(profile, &p->profile, sizeof(*profile));
+        allow_su = p->profile.allow_su;
+        found = true;
+    }
+    rcu_read_unlock();
+
+    if (duplicate) {
+        pr_warn("duplicate profiles for uid %d, failing closed\n", uid);
+        return false;
+    }
+
+    return found && (profile ? profile->allow_su : allow_su);
 }
 
 static inline bool forbid_system_uid(uid_t uid)
@@ -146,28 +223,141 @@ static inline bool forbid_system_uid(uid_t uid)
     return uid < SHELL_UID && uid != SYSTEM_UID;
 }
 
-static bool profile_valid(struct app_profile *profile)
+static ssize_t validate_fixed_cstr(const char *field, size_t size)
 {
-    if (!profile) {
+    size_t len;
+
+    if (!field || !size)
+        return -EINVAL;
+
+    len = strnlen(field, size);
+    if (len == size)
+        return -EINVAL;
+
+    return len;
+}
+
+static bool fixed_cstr_eq(const char *field, const char *literal, size_t size)
+{
+    size_t literal_len = strlen(literal);
+    ssize_t field_len = validate_fixed_cstr(field, size);
+
+    if (field_len < 0 || field_len != literal_len)
         return false;
+
+    return !memcmp(field, literal, literal_len);
+}
+
+static bool profile_key_eq(const struct app_profile *a,
+                           const struct app_profile *b)
+{
+    ssize_t a_len = validate_fixed_cstr(a->key, sizeof(a->key));
+    ssize_t b_len = validate_fixed_cstr(b->key, sizeof(b->key));
+
+    if (a_len < 0 || b_len < 0 || a_len != b_len)
+        return false;
+
+    return !memcmp(a->key, b->key, a_len);
+}
+
+static bool is_special_profile_key(const char *key)
+{
+    return fixed_cstr_eq(key, "$", KSU_MAX_PACKAGE_NAME) ||
+           fixed_cstr_eq(key, "#", KSU_MAX_PACKAGE_NAME);
+}
+
+static int root_profile_valid(struct root_profile *profile)
+{
+    ssize_t domain_len;
+
+    if (!profile)
+        return -EINVAL;
+
+    if (profile->groups_count < 0 || profile->groups_count > KSU_MAX_GROUPS) {
+        pr_err("invalid root profile groups_count: %d\n",
+               profile->groups_count);
+        return -EINVAL;
+    }
+
+    domain_len = validate_fixed_cstr(profile->selinux_domain,
+                                     sizeof(profile->selinux_domain));
+    if (domain_len <= 0) {
+        pr_err("invalid root profile SELinux domain\n");
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
+static int profile_valid(struct app_profile *profile)
+{
+    ssize_t key_len;
+    ssize_t template_len;
+    bool uses_root_config;
+
+    if (!profile) {
+        return -EINVAL;
     }
 
     if (profile->version < KSU_APP_PROFILE_VER) {
         pr_info("Unsupported profile version: %d\n", profile->version);
-        return false;
+        return -EINVAL;
     }
 
-    if (profile->allow_su) {
-        if (profile->rp_config.profile.groups_count > KSU_MAX_GROUPS) {
-            return false;
+    key_len = validate_fixed_cstr(profile->key, sizeof(profile->key));
+    if (key_len <= 0) {
+        pr_err("invalid app profile key\n");
+        return -EINVAL;
+    }
+
+    uses_root_config =
+        profile->allow_su || fixed_cstr_eq(profile->key, "#", sizeof(profile->key));
+    if (uses_root_config) {
+        template_len = validate_fixed_cstr(
+            profile->rp_config.template_name,
+            sizeof(profile->rp_config.template_name));
+        if (template_len < 0) {
+            pr_err("invalid app profile template name\n");
+            return -EINVAL;
         }
 
-        if (strlen(profile->rp_config.profile.selinux_domain) == 0) {
-            return false;
+        if (root_profile_valid(&profile->rp_config.profile)) {
+            return -EINVAL;
         }
     }
 
-    return true;
+    return 0;
+}
+
+static void remove_uid_from_policy_cache(uid_t uid)
+{
+    if (likely(uid <= BITMAP_UID_MAX)) {
+        allow_list_bitmap[uid / BITS_PER_BYTE] &=
+            ~(1 << (uid % BITS_PER_BYTE));
+    }
+    remove_uid_from_arr(uid);
+}
+
+static void add_uid_to_policy_cache(uid_t uid)
+{
+    if (likely(uid <= BITMAP_UID_MAX)) {
+        allow_list_bitmap[uid / BITS_PER_BYTE] |=
+            1 << (uid % BITS_PER_BYTE);
+    } else {
+        int i;
+
+        for (i = 0; i < allow_list_pointer; i++) {
+            if (allow_list_arr[i] == uid)
+                return;
+        }
+
+        if (allow_list_pointer >= ARRAY_SIZE(allow_list_arr)) {
+            pr_err("too many apps registered\n");
+            WARN_ON(1);
+        } else {
+            allow_list_arr[allow_list_pointer++] = uid;
+        }
+    }
 }
 
 /*
@@ -185,7 +375,7 @@ int ksu_set_app_profile(struct app_profile *profile)
     int result = 0;
     u16 count = 0;
 
-    if (!profile_valid(profile)) {
+    if (profile_valid(profile)) {
         pr_err("Failed to set app profile: invalid profile!\n");
         return -EINVAL;
     }
@@ -194,9 +384,25 @@ int ksu_set_app_profile(struct app_profile *profile)
 
     list_for_each_entry (p, &allow_list, list) {
         ++count;
-        // both uid and package must match, otherwise it will break multiple package with different user id
-        if (profile->current_uid == p->profile.current_uid &&
-            !strcmp(profile->key, p->profile.key)) {
+        if (profile->current_uid != p->profile.current_uid)
+            continue;
+
+        /*
+         * Runtime root authorization is UID-only in the kernel. To avoid
+         * insertion-order-dependent policy for shared/reused UIDs, normal app
+         * profiles are therefore one-profile-per-UID. Default profiles are
+         * keyed by "$"/"#" and are exempt from this UID collision rule.
+         */
+        if (!profile_key_eq(profile, &p->profile) &&
+            !is_special_profile_key(profile->key) &&
+            !is_special_profile_key(p->profile.key)) {
+            pr_warn("reject duplicate profile for uid %d with different key\n",
+                    profile->current_uid);
+            result = -EEXIST;
+            goto out_unlock;
+        }
+
+        if (profile_key_eq(profile, &p->profile)) {
             // found it, just override it all!
             np = (struct perm_data *)kzalloc(sizeof(struct perm_data),
                                              GFP_KERNEL);
@@ -207,6 +413,7 @@ int ksu_set_app_profile(struct app_profile *profile)
             memcpy(&np->profile, profile, sizeof(*profile));
             list_replace_rcu(&p->list, &np->list);
             kfree_rcu(p, rcu);
+            remove_uid_from_policy_cache(profile->current_uid);
             goto out;
         }
     }
@@ -243,37 +450,19 @@ out:
     result = 0;
 
     // check if the default profiles is changed, cache it to a single struct to accelerate access.
-    if (unlikely(!strcmp(profile->key, "$"))) {
+    if (unlikely(fixed_cstr_eq(profile->key, "$", sizeof(profile->key)))) {
         // set default non root profile
         memcpy(&default_non_root_profile, &profile->nrp_config.profile,
                sizeof(default_non_root_profile));
-    } else if (unlikely(!strcmp(profile->key, "#"))) {
+    } else if (unlikely(fixed_cstr_eq(profile->key, "#", sizeof(profile->key)))) {
         // set default root profile
         // TODO: Do we really need this?
         memcpy(&default_root_profile, &profile->rp_config.profile,
                sizeof(default_root_profile));
-    } else if (profile->current_uid <= BITMAP_UID_MAX) {
-        if (profile->allow_su)
-            allow_list_bitmap[profile->current_uid / BITS_PER_BYTE] |=
-                1 << (profile->current_uid % BITS_PER_BYTE);
-        else
-            allow_list_bitmap[profile->current_uid / BITS_PER_BYTE] &=
-                ~(1 << (profile->current_uid % BITS_PER_BYTE));
+    } else if (profile->allow_su) {
+        add_uid_to_policy_cache(profile->current_uid);
     } else {
-        if (profile->allow_su) {
-            /*
-             * 1024 apps with uid higher than BITMAP_UID_MAX
-             * registered to request superuser?
-             */
-            if (allow_list_pointer >= ARRAY_SIZE(allow_list_arr)) {
-                pr_err("too many apps registered\n");
-                WARN_ON(1);
-            } else {
-                allow_list_arr[allow_list_pointer++] = profile->current_uid;
-            }
-        } else {
-            remove_uid_from_arr(profile->current_uid);
-        }
+        remove_uid_from_policy_cache(profile->current_uid);
     }
 
 out_unlock:
@@ -283,30 +472,17 @@ out_unlock:
 
 bool __ksu_is_allow_uid(uid_t uid)
 {
-    int i;
-
     if (forbid_system_uid(uid)) {
         // do not bother going through the list if it's system
         return false;
     }
 
-    if (likely(ksu_is_manager_appid_valid()) &&
-        unlikely(ksu_get_manager_appid() == uid % PER_USER_RANGE)) {
+    if (is_uid_manager(uid)) {
         // manager is always allowed!
         return true;
     }
 
-    if (likely(uid <= BITMAP_UID_MAX)) {
-        return !!(allow_list_bitmap[uid / BITS_PER_BYTE] &
-                  (1 << (uid % BITS_PER_BYTE)));
-    } else {
-        for (i = 0; i < allow_list_pointer; i++) {
-            if (allow_list_arr[i] == uid)
-                return true;
-        }
-    }
-
-    return false;
+    return find_unique_uid_profile(uid, NULL);
 }
 
 bool __ksu_is_allow_uid_for_current(uid_t uid)
@@ -321,15 +497,16 @@ bool __ksu_is_allow_uid_for_current(uid_t uid)
 bool ksu_uid_should_umount(uid_t uid)
 {
     struct app_profile profile = { .current_uid = uid };
-    if (likely(ksu_is_manager_appid_valid()) &&
-        unlikely(ksu_get_manager_appid() == uid % PER_USER_RANGE)) {
+    struct non_root_profile default_profile;
+    if (is_uid_manager(uid)) {
         // we should not umount on manager!
         return false;
     }
     bool found = ksu_get_app_profile(&profile);
     if (!found) {
         // no app profile found, it must be non root app
-        return default_non_root_profile.umount_modules;
+        read_default_non_root_profile(&default_profile);
+        return default_profile.umount_modules;
     }
     if (profile.allow_su) {
         // if found and it is granted to su, we shouldn't umount for it
@@ -337,37 +514,34 @@ bool ksu_uid_should_umount(uid_t uid)
     } else {
         // found an app profile
         if (profile.nrp_config.use_default) {
-            return default_non_root_profile.umount_modules;
+            read_default_non_root_profile(&default_profile);
+            return default_profile.umount_modules;
         } else {
             return profile.nrp_config.profile.umount_modules;
         }
     }
 }
 
-void ksu_get_root_profile(uid_t uid, struct root_profile *profile)
+bool ksu_get_root_profile(uid_t uid, struct root_profile *profile)
 {
-    struct perm_data *p = NULL;
+    struct app_profile app_profile;
 
     if (is_uid_manager(uid)) {
         goto use_default;
     }
 
-    rcu_read_lock();
-    list_for_each_entry_rcu (p, &allow_list, list) {
-        if (uid == p->profile.current_uid && p->profile.allow_su) {
-            if (!p->profile.rp_config.use_default) {
-                memcpy(profile, &p->profile.rp_config.profile,
-                       sizeof(*profile));
-                rcu_read_unlock();
-                return;
-            }
-        }
+    if (!find_unique_uid_profile(uid, &app_profile))
+        return false;
+
+    if (!app_profile.rp_config.use_default) {
+        memcpy(profile, &app_profile.rp_config.profile, sizeof(*profile));
+        return true;
     }
-    rcu_read_unlock();
 
 use_default:
     // use default profile
-    memcpy(profile, &default_root_profile, sizeof(*profile));
+    read_default_root_profile(profile);
+    return true;
 }
 
 bool ksu_get_allow_list(int *array, u16 length, u16 *out_length, u16 *out_total,
@@ -450,11 +624,26 @@ void ksu_prune_allowlist(bool (*is_uid_valid)(uid_t, char *, void *),
     list_for_each_entry_safe (np, n, &allow_list, list) {
         uid_t uid = np->profile.current_uid;
         char *package = np->profile.key;
+        ssize_t package_len =
+            validate_fixed_cstr(package, sizeof(np->profile.key));
         // we use this uid for special cases, don't prune it!
         bool is_preserved_uid = uid == KSU_APP_PROFILE_PRESERVE_UID;
+        if (package_len < 0) {
+            modified = true;
+            pr_info("prune invalid profile key for uid: %d\n", uid);
+            list_del_rcu(&np->list);
+            kfree_rcu(np, rcu);
+            if (likely(uid <= BITMAP_UID_MAX)) {
+                allow_list_bitmap[uid / BITS_PER_BYTE] &=
+                    ~(1 << (uid % BITS_PER_BYTE));
+            }
+            remove_uid_from_arr(uid);
+            continue;
+        }
         if (!is_preserved_uid && !is_uid_valid(uid, package, data)) {
             modified = true;
-            pr_info("prune uid: %d, package: %s\n", uid, package);
+            pr_info("prune uid: %d, package: %.*s\n", uid, (int)package_len,
+                    package);
             list_del_rcu(&np->list);
             kfree_rcu(np, rcu);
             if (likely(uid <= BITMAP_UID_MAX)) {
@@ -500,3 +689,135 @@ void ksu_allowlist_exit(void)
     }
     mutex_unlock(&allowlist_mutex);
 }
+
+#if IS_ENABLED(CONFIG_KUNIT)
+static void init_test_root_profile(struct app_profile *profile)
+{
+    memset(profile, 0, sizeof(*profile));
+    profile->version = KSU_APP_PROFILE_VER;
+    strscpy(profile->key, "#", sizeof(profile->key));
+    profile->current_uid = KSU_APP_PROFILE_PRESERVE_UID;
+    profile->allow_su = true;
+    strscpy(profile->rp_config.profile.selinux_domain,
+            KSU_DEFAULT_SELINUX_DOMAIN,
+            sizeof(profile->rp_config.profile.selinux_domain));
+}
+
+static void allowlist_test_init(struct kunit *test)
+{
+    ksu_allowlist_init();
+}
+
+static void allowlist_test_exit(struct kunit *test)
+{
+    ksu_allowlist_exit();
+}
+
+static void default_root_rejects_non_nul_domain_test(struct kunit *test)
+{
+    struct app_profile profile;
+
+    init_test_root_profile(&profile);
+    profile.allow_su = false;
+    memset(profile.rp_config.profile.selinux_domain, 'a',
+           sizeof(profile.rp_config.profile.selinux_domain));
+
+    KUNIT_EXPECT_EQ(test, ksu_set_app_profile(&profile), -EINVAL);
+}
+
+static void invalid_default_root_does_not_mutate_previous_test(struct kunit *test)
+{
+    struct app_profile valid;
+    struct app_profile invalid;
+    struct root_profile before;
+    struct root_profile after;
+
+    init_test_root_profile(&valid);
+    valid.rp_config.profile.uid = 123;
+    KUNIT_ASSERT_EQ(test, ksu_set_app_profile(&valid), 0);
+    read_default_root_profile(&before);
+
+    init_test_root_profile(&invalid);
+    invalid.allow_su = false;
+    invalid.rp_config.profile.uid = 456;
+    memset(invalid.rp_config.profile.selinux_domain, 'b',
+           sizeof(invalid.rp_config.profile.selinux_domain));
+    KUNIT_EXPECT_EQ(test, ksu_set_app_profile(&invalid), -EINVAL);
+
+    read_default_root_profile(&after);
+    KUNIT_EXPECT_EQ(test, after.uid, before.uid);
+    KUNIT_EXPECT_EQ(test,
+                    memcmp(after.selinux_domain, before.selinux_domain,
+                           sizeof(after.selinux_domain)),
+                    0);
+}
+
+static void valid_default_root_is_accepted_test(struct kunit *test)
+{
+    struct app_profile profile;
+
+    init_test_root_profile(&profile);
+
+    KUNIT_EXPECT_EQ(test, ksu_set_app_profile(&profile), 0);
+}
+
+static void root_profile_rejects_negative_groups_count_test(struct kunit *test)
+{
+    struct app_profile profile;
+
+    init_test_root_profile(&profile);
+    profile.rp_config.profile.groups_count = -1;
+
+    KUNIT_EXPECT_EQ(test, ksu_set_app_profile(&profile), -EINVAL);
+}
+
+static void root_profile_accepts_zero_groups_count_test(struct kunit *test)
+{
+    struct app_profile profile;
+
+    init_test_root_profile(&profile);
+    profile.rp_config.profile.groups_count = 0;
+
+    KUNIT_EXPECT_EQ(test, ksu_set_app_profile(&profile), 0);
+}
+
+static void root_profile_accepts_max_groups_count_test(struct kunit *test)
+{
+    struct app_profile profile;
+
+    init_test_root_profile(&profile);
+    profile.rp_config.profile.groups_count = KSU_MAX_GROUPS;
+
+    KUNIT_EXPECT_EQ(test, ksu_set_app_profile(&profile), 0);
+}
+
+static void root_profile_rejects_too_many_groups_test(struct kunit *test)
+{
+    struct app_profile profile;
+
+    init_test_root_profile(&profile);
+    profile.rp_config.profile.groups_count = KSU_MAX_GROUPS + 1;
+
+    KUNIT_EXPECT_EQ(test, ksu_set_app_profile(&profile), -EINVAL);
+}
+
+static struct kunit_case allowlist_profile_validation_cases[] = {
+    KUNIT_CASE(default_root_rejects_non_nul_domain_test),
+    KUNIT_CASE(invalid_default_root_does_not_mutate_previous_test),
+    KUNIT_CASE(valid_default_root_is_accepted_test),
+    KUNIT_CASE(root_profile_rejects_negative_groups_count_test),
+    KUNIT_CASE(root_profile_accepts_zero_groups_count_test),
+    KUNIT_CASE(root_profile_accepts_max_groups_count_test),
+    KUNIT_CASE(root_profile_rejects_too_many_groups_test),
+    {}
+};
+
+static struct kunit_suite allowlist_profile_validation_suite = {
+    .name = "ksu_allowlist_profile_validation",
+    .init = allowlist_test_init,
+    .exit = allowlist_test_exit,
+    .test_cases = allowlist_profile_validation_cases,
+};
+
+kunit_test_suite(allowlist_profile_validation_suite);
+#endif

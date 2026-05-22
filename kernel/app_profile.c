@@ -34,8 +34,11 @@ static struct group_info root_groups = { .usage = ATOMIC_INIT(2) };
  */
 void setup_groups(struct root_profile *profile, struct cred *cred)
 {
-    if (profile->groups_count > KSU_MAX_GROUPS) {
-        pr_warn("Failed to setgroups, too large group: %d!\n", profile->uid);
+    int ngroups;
+
+    if (profile->groups_count < 0 || profile->groups_count > KSU_MAX_GROUPS) {
+        pr_warn("Failed to setgroups, invalid group count: %d!\n",
+                profile->groups_count);
         return;
     }
 
@@ -47,7 +50,7 @@ void setup_groups(struct root_profile *profile, struct cred *cred)
         return;
     }
 
-    u32 ngroups = profile->groups_count;
+    ngroups = profile->groups_count;
     struct group_info *group_info = groups_alloc(ngroups);
     if (!group_info) {
         pr_warn("Failed to setgroups, ENOMEM for: %d\n", profile->uid);
@@ -132,7 +135,11 @@ void escape_with_root_profile(void)
         return;
     }
 
-    ksu_get_root_profile(cred->uid.val, &profile);
+    if (!ksu_get_root_profile(cred->uid.val, &profile)) {
+        pr_warn("root profile lookup denied for uid %d\n", cred->uid.val);
+        abort_creds(cred);
+        return;
+    }
 
     cred->uid.val = profile.uid;
     cred->suid.val = profile.uid;

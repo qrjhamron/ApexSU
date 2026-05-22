@@ -113,17 +113,25 @@ static struct avtab_node *get_avtab_node(struct policydb *db,
 
     if (!node) {
         struct avtab_datum avdatum = {};
+        struct avtab_extended_perms *xperms_copy = NULL;
         /*
      * AUDITDENY, aka DONTAUDIT, are &= assigned, versus |= for
      * others. Initialize the data accordingly.
      */
         if (key->specified & AVTAB_XPERMS) {
-            avdatum.u.xperms = xperms;
+            xperms_copy = kmemdup(xperms, sizeof(*xperms), GFP_ATOMIC);
+            if (!xperms_copy)
+                return NULL;
+            avdatum.u.xperms = xperms_copy;
         } else {
             avdatum.u.data = key->specified == AVTAB_AUDITDENY ? ~0U : 0U;
         }
         /* this is used to get the node - insertion is actually unique */
         node = avtab_insert_nonunique(&db->te_avtab, key, &avdatum);
+        if (!node) {
+            kfree(xperms_copy);
+            return NULL;
+        }
 
         int grow_size = sizeof(struct avtab_key);
         grow_size += sizeof(struct avtab_datum);
@@ -241,6 +249,10 @@ static void add_rule_raw(struct policydb *db, struct type_datum *src,
         key.specified = effect;
 
         struct avtab_node *node = get_avtab_node(db, &key, NULL);
+        if (!node) {
+            pr_err("add_rule_raw: failed to allocate avtab node\n");
+            return;
+        }
         if (invert) {
             if (perm)
                 node->datum.u.data &= ~(1U << (perm->value - 1));
@@ -433,6 +445,10 @@ static bool add_type_rule(struct policydb *db, const char *s, const char *t,
     key.specified = effect;
 
     struct avtab_node *node = get_avtab_node(db, &key, NULL);
+    if (!node) {
+        pr_err("add_type_rule: failed to allocate avtab node\n");
+        return false;
+    }
     node->datum.u.data = def->value;
 
     return true;
@@ -529,20 +545,66 @@ static bool add_filename_trans(struct policydb *db, const char *s,
     }
 
     if (trans == NULL) {
+        struct filename_trans_key *new_key;
+        int ret;
+
         trans = (struct filename_trans_datum *)kcalloc(1, sizeof(*trans),
                                                        GFP_ATOMIC);
-        struct filename_trans_key *new_key =
+        if (!trans) {
+            pr_err("add_filename_trans: alloc trans failed\n");
+            return false;
+        }
+
+        new_key =
             (struct filename_trans_key *)kzalloc(sizeof(*new_key), GFP_ATOMIC);
+        if (!new_key) {
+            pr_err("add_filename_trans: alloc key failed\n");
+            kfree(trans);
+            return false;
+        }
+
         *new_key = key;
         new_key->name = kstrdup(key.name, GFP_ATOMIC);
+        if (!new_key->name) {
+            pr_err("add_filename_trans: alloc key name failed\n");
+            kfree(new_key);
+            kfree(trans);
+            return false;
+        }
+
         trans->next = last;
         trans->otype = def->value;
-        hashtab_insert(&db->filename_trans, new_key, trans,
-                       filenametr_key_params);
+        ret = ebitmap_set_bit(&trans->stypes, src->value - 1, 1);
+        if (ret) {
+            pr_err("add_filename_trans: set stypes bit failed: %d\n", ret);
+            kfree(new_key->name);
+            kfree(new_key);
+            kfree(trans);
+            return false;
+        }
+
+        ret = hashtab_insert(&db->filename_trans, new_key, trans,
+                             filenametr_key_params);
+        if (ret) {
+            pr_err("add_filename_trans: insert filename_trans failed: %d\n",
+                   ret);
+            ebitmap_destroy(&trans->stypes);
+            kfree(new_key->name);
+            kfree(new_key);
+            kfree(trans);
+            return false;
+        }
+    } else {
+        int ret = ebitmap_set_bit(&trans->stypes, src->value - 1, 1);
+        if (ret) {
+            pr_err("add_filename_trans: set existing stypes bit failed: %d\n",
+                   ret);
+            return false;
+        }
     }
 
     db->compat_filename_trans_count++;
-    return ebitmap_set_bit(&trans->stypes, src->value - 1, 1) == 0;
+    return true;
 }
 
 static bool add_genfscon(struct policydb *db, const char *fs_name,
@@ -581,13 +643,28 @@ void *ksu_kvrealloc_compat(const void *p, size_t oldsize, size_t newsize,
 
 static bool add_type(struct policydb *db, const char *type_name, bool attr)
 {
+    int i = 0;
+    int j;
+    u32 old_nprim;
+    u32 value;
+    int ret;
     struct type_datum *type = symtab_search(&db->p_types, type_name);
+    struct ebitmap *new_type_attr_map_array = NULL;
+    struct type_datum **new_type_val_to_struct = NULL;
+    char **new_val_to_name_types = NULL;
+    char *key = NULL;
+    size_t old_type_bytes, new_type_bytes;
+    size_t old_struct_bytes, new_struct_bytes;
+    size_t old_name_bytes, new_name_bytes;
+
     if (type) {
         pr_warn("Type %s already exists\n", type_name);
         return true;
     }
 
-    u32 value = ++db->p_types.nprim;
+    old_nprim = db->p_types.nprim;
+    value = old_nprim + 1;
+
     type = (struct type_datum *)kzalloc(sizeof(struct type_datum), GFP_ATOMIC);
     if (!type) {
         pr_err("add_type: alloc type_datum failed.\n");
@@ -598,60 +675,104 @@ static bool add_type(struct policydb *db, const char *type_name, bool attr)
     type->value = value;
     type->attribute = attr;
 
-    char *key = kstrdup(type_name, GFP_ATOMIC);
+    key = kstrdup(type_name, GFP_ATOMIC);
     if (!key) {
         pr_err("add_type: alloc key failed.\n");
+        kfree(type);
         return false;
+    }
+
+    old_type_bytes = sizeof(struct ebitmap) * old_nprim;
+    new_type_bytes = sizeof(struct ebitmap) * value;
+    new_type_attr_map_array = (struct ebitmap *)kvmalloc(new_type_bytes,
+                                                          GFP_ATOMIC);
+    if (!new_type_attr_map_array) {
+        pr_err("add_type: alloc type_attr_map_array failed\n");
+        kfree(key);
+        kfree(type);
+        return false;
+    }
+    if (old_type_bytes)
+        memcpy(new_type_attr_map_array, db->type_attr_map_array,
+               old_type_bytes);
+    ebitmap_init(&new_type_attr_map_array[value - 1]);
+    if (ebitmap_set_bit(&new_type_attr_map_array[value - 1], value - 1, 1)) {
+        pr_err("add_type: set type_attr_map bit failed\n");
+        kvfree(new_type_attr_map_array);
+        kfree(key);
+        kfree(type);
+        return false;
+    }
+
+    old_struct_bytes = sizeof(*db->type_val_to_struct) * old_nprim;
+    new_struct_bytes = sizeof(*db->type_val_to_struct) * value;
+    new_type_val_to_struct = (struct type_datum **)kvmalloc(new_struct_bytes,
+                                                             GFP_ATOMIC);
+    if (!new_type_val_to_struct) {
+        pr_err("add_type: alloc type_val_to_struct failed\n");
+        ebitmap_destroy(&new_type_attr_map_array[value - 1]);
+        kvfree(new_type_attr_map_array);
+        kfree(key);
+        kfree(type);
+        return false;
+    }
+    if (old_struct_bytes)
+        memcpy(new_type_val_to_struct, db->type_val_to_struct,
+               old_struct_bytes);
+    new_type_val_to_struct[value - 1] = NULL;
+
+    old_name_bytes = sizeof(char *) * old_nprim;
+    new_name_bytes = sizeof(char *) * value;
+    new_val_to_name_types = (char **)kvmalloc(new_name_bytes, GFP_ATOMIC);
+    if (!new_val_to_name_types) {
+        pr_err("add_type: alloc val_to_name failed\n");
+        kvfree(new_type_val_to_struct);
+        ebitmap_destroy(&new_type_attr_map_array[value - 1]);
+        kvfree(new_type_attr_map_array);
+        kfree(key);
+        kfree(type);
+        return false;
+    }
+    if (old_name_bytes)
+        memcpy(new_val_to_name_types, db->sym_val_to_name[SYM_TYPES],
+               old_name_bytes);
+    new_val_to_name_types[value - 1] = NULL;
+
+    for (i = 0; i < db->p_roles.nprim; ++i) {
+        ret = ebitmap_set_bit(&db->role_val_to_struct[i]->types, value - 1, 1);
+        if (ret) {
+            pr_err("add_type: set role types bit failed: %d\n", ret);
+            goto rollback_role_bits;
+        }
     }
 
     if (symtab_insert(&db->p_types, key, type)) {
         pr_err("add_type: insert symtab failed.\n");
-        return false;
+        goto rollback_role_bits;
     }
 
-    struct ebitmap *new_type_attr_map_array =
-        ksu_kvrealloc(db->type_attr_map_array, value * sizeof(struct ebitmap),
-                      (value - 1) * sizeof(struct ebitmap));
-
-    if (!new_type_attr_map_array) {
-        pr_err("add_type: alloc type_attr_map_array failed\n");
-        return false;
-    }
-
-    struct type_datum **new_type_val_to_struct =
-        ksu_kvrealloc(db->type_val_to_struct,
-                      sizeof(*db->type_val_to_struct) * value,
-                      sizeof(*db->type_val_to_struct) * (value - 1));
-
-    if (!new_type_val_to_struct) {
-        pr_err("add_type: alloc type_val_to_struct failed\n");
-        return false;
-    }
-
-    char **new_val_to_name_types =
-        ksu_kvrealloc(db->sym_val_to_name[SYM_TYPES], sizeof(char *) * value,
-                      sizeof(char *) * (value - 1));
-    if (!new_val_to_name_types) {
-        pr_err("add_type: alloc val_to_name failed\n");
-        return false;
-    }
-
+    db->p_types.nprim = value;
+    kvfree(db->type_attr_map_array);
     db->type_attr_map_array = new_type_attr_map_array;
-    ebitmap_init(&db->type_attr_map_array[value - 1]);
-    ebitmap_set_bit(&db->type_attr_map_array[value - 1], value - 1, 1);
-
+    kvfree(db->type_val_to_struct);
     db->type_val_to_struct = new_type_val_to_struct;
     db->type_val_to_struct[value - 1] = type;
-
+    kvfree(db->sym_val_to_name[SYM_TYPES]);
     db->sym_val_to_name[SYM_TYPES] = new_val_to_name_types;
     db->sym_val_to_name[SYM_TYPES][value - 1] = key;
 
-    int i;
-    for (i = 0; i < db->p_roles.nprim; ++i) {
-        ebitmap_set_bit(&db->role_val_to_struct[i]->types, value - 1, 1);
-    }
-
     return true;
+
+rollback_role_bits:
+    for (j = 0; j < i; ++j)
+        ebitmap_set_bit(&db->role_val_to_struct[j]->types, value - 1, 0);
+    kvfree(new_val_to_name_types);
+    kvfree(new_type_val_to_struct);
+    ebitmap_destroy(&new_type_attr_map_array[value - 1]);
+    kvfree(new_type_attr_map_array);
+    kfree(key);
+    kfree(type);
+    return false;
 }
 
 static bool set_type_state(struct policydb *db, const char *type_name,

@@ -79,6 +79,7 @@ internal suspend fun prepareWebView(
 
             val prefs = activity.getSharedPreferences("settings", Context.MODE_PRIVATE)
             WebView.setWebContentsDebuggingEnabled(prefs.getBoolean("enable_web_debugging", false))
+            val allowWebUiRootActions = prefs.getBoolean("enable_webui_root_actions", false)
 
             webView.settings.apply {
                 javaScriptEnabled = true
@@ -156,7 +157,10 @@ internal suspend fun prepareWebView(
             }
 
             // JS Interface
-            val webviewInterface = WebViewInterface(webUIState)
+            val webviewInterface = WebViewInterface(
+                state = webUIState,
+                allowPrivilegedOperations = allowWebUiRootActions
+            )
             webUIState.webView = webView
             webView.addJavascriptInterface(webviewInterface, "ksu")
             webUIState.uiEvent = WebUIEvent.WebViewReady

@@ -122,14 +122,22 @@ pub fn init() -> Result<()> {
     unlink("/init")?;
 
     let real_init = match access("/init.real", Access::EXISTS) {
-        Ok(_) => "init.real",
-        Err(_) => "/system/bin/init",
+        Ok(_) => select_init_target(true),
+        Err(_) => select_init_target(false),
     };
 
     log::info!("init is {}", real_init);
     symlink(real_init, "/init")?;
 
     Ok(())
+}
+
+fn select_init_target(init_real_exists: bool) -> &'static str {
+    if init_real_exists {
+        "init.real"
+    } else {
+        "/system/bin/init"
+    }
 }
 
 fn has_kernelsu_legacy() -> bool {
@@ -150,18 +158,19 @@ fn has_kernelsu_legacy() -> bool {
     version != 0
 }
 
+#[repr(C)]
+#[derive(Default)]
+struct GetInfoCmd {
+    version: u32,
+    flags: u32,
+    features: u32,
+}
+
 fn has_kernelsu_v2() -> bool {
     use syscalls::{Sysno, syscall};
     const KSU_INSTALL_MAGIC1: u32 = 0xDEADBEEF;
     const KSU_INSTALL_MAGIC2: u32 = 0xCAFEBABE;
     const KSU_IOCTL_GET_INFO: u32 = 0x80004b02; // _IOC(_IOC_READ, 'K', 2, 0)
-
-    #[repr(C)]
-    #[derive(Default)]
-    struct GetInfoCmd {
-        version: u32,
-        flags: u32,
-    }
 
     // Try new method: get driver fd using reboot syscall with magic numbers
     let mut fd: i32 = -1;
@@ -203,4 +212,25 @@ fn has_kernelsu_v2() -> bool {
 
 pub fn has_kernelsu() -> bool {
     has_kernelsu_v2() || has_kernelsu_legacy()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn init_target_prefers_init_real_over_system_init() {
+        assert_eq!(select_init_target(true), "init.real");
+    }
+
+    #[test]
+    fn init_target_falls_back_to_system_init_when_init_real_missing() {
+        assert_eq!(select_init_target(false), "/system/bin/init");
+    }
+
+    #[test]
+    fn get_info_cmd_matches_kernel_payload_size() {
+        assert_eq!(std::mem::size_of::<GetInfoCmd>(), 12);
+        assert_eq!(std::mem::align_of::<GetInfoCmd>(), 4);
+    }
 }

@@ -40,7 +40,7 @@ bool ksu_get_app_profile(struct app_profile *);
 int ksu_set_app_profile(struct app_profile *);
 
 bool ksu_uid_should_umount(uid_t uid);
-void ksu_get_root_profile(uid_t uid, struct root_profile *);
+bool ksu_get_root_profile(uid_t uid, struct root_profile *);
 
 static inline bool is_appuid(uid_t uid)
 {

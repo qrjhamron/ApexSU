@@ -160,6 +160,22 @@ pub fn validate_module_zip_from_reader<R: Read + Seek>(reader: R) -> Result<Vali
 
         total_size = total_size.saturating_add(size);
 
+        if let Some(mode) = entry.unix_mode() {
+            let file_type = mode & 0o170000;
+            let is_regular = file_type == 0 || file_type == 0o100000;
+            let is_dir = file_type == 0o040000;
+            if !(is_regular || is_dir) {
+                issues.push(ValidationIssue {
+                    check: "unsupported_entry_type".into(),
+                    severity: IssueSeverity::Error,
+                    message: format!(
+                        "Entry '{name}' uses unsupported unix file type (mode: {mode:#o})"
+                    ),
+                    suggestion: "Use only regular files and directories in module ZIP".into(),
+                });
+            }
+        }
+
         if name == "module.prop" {
             has_module_prop = true;
         }
@@ -340,6 +356,68 @@ pub fn has_path_traversal(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Cursor, Write as _};
+    use zip::write::SimpleFileOptions;
+
+    fn stored_zip_with_unix_mode(name: &str, unix_mode: u32) -> Cursor<Vec<u8>> {
+        fn push_u16(out: &mut Vec<u8>, value: u16) {
+            out.extend_from_slice(&value.to_le_bytes());
+        }
+
+        fn push_u32(out: &mut Vec<u8>, value: u32) {
+            out.extend_from_slice(&value.to_le_bytes());
+        }
+
+        let name = name.as_bytes();
+        let name_len = u16::try_from(name.len()).unwrap();
+        let mut data = Vec::new();
+
+        let local_header_offset = u32::try_from(data.len()).unwrap();
+        push_u32(&mut data, 0x0403_4b50);
+        push_u16(&mut data, 20);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u32(&mut data, 0);
+        push_u32(&mut data, 0);
+        push_u32(&mut data, 0);
+        push_u16(&mut data, name_len);
+        push_u16(&mut data, 0);
+        data.extend_from_slice(name);
+
+        let central_directory_offset = u32::try_from(data.len()).unwrap();
+        push_u32(&mut data, 0x0201_4b50);
+        push_u16(&mut data, 0x0314);
+        push_u16(&mut data, 20);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u32(&mut data, 0);
+        push_u32(&mut data, 0);
+        push_u32(&mut data, 0);
+        push_u16(&mut data, name_len);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u32(&mut data, unix_mode << 16);
+        push_u32(&mut data, local_header_offset);
+        data.extend_from_slice(name);
+
+        let central_directory_size = u32::try_from(data.len()).unwrap() - central_directory_offset;
+        push_u32(&mut data, 0x0605_4b50);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 0);
+        push_u16(&mut data, 1);
+        push_u16(&mut data, 1);
+        push_u32(&mut data, central_directory_size);
+        push_u32(&mut data, central_directory_offset);
+        push_u16(&mut data, 0);
+
+        Cursor::new(data)
+    }
 
     #[test]
     fn test_validate_id_valid() {
@@ -402,5 +480,94 @@ mod tests {
         let mut module_id = None;
         validate_module_prop(content, &mut issues, &mut module_id);
         assert!(issues.iter().any(|i| i.check == "module_id_format"));
+    }
+
+    #[test]
+    fn test_rejects_symlink_entry_type() {
+        let mut data = Cursor::new(Vec::<u8>::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut data);
+            writer
+                .add_symlink("sym", "/system/bin/sh", SimpleFileOptions::default())
+                .unwrap();
+            writer
+                .start_file("module.prop", SimpleFileOptions::default())
+                .unwrap();
+            writer
+                .write_all(b"id=com.example\nname=Test\nversion=1\nversionCode=1\n")
+                .unwrap();
+            writer.finish().unwrap();
+        }
+        data.set_position(0);
+        let report = validate_module_zip_from_reader(data).unwrap();
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.check == "unsupported_entry_type")
+        );
+        assert!(!report.is_valid());
+    }
+
+    #[test]
+    fn test_rejects_character_device_entry_type() {
+        let data = stored_zip_with_unix_mode("dev/char", 0o020666);
+        let report = validate_module_zip_from_reader(data).unwrap();
+
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.check == "unsupported_entry_type")
+        );
+        assert!(!report.is_valid());
+    }
+
+    #[test]
+    fn test_rejects_block_device_entry_type() {
+        let data = stored_zip_with_unix_mode("dev/block", 0o060660);
+        let report = validate_module_zip_from_reader(data).unwrap();
+
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.check == "unsupported_entry_type")
+        );
+        assert!(!report.is_valid());
+    }
+
+    #[test]
+    fn test_unix_permissions_cannot_encode_symlink_type() {
+        let mut data = Cursor::new(Vec::<u8>::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut data);
+            // zip::write::unix_permissions() preserves only 0o777 permission bits;
+            // it cannot encode special file types such as symlink/device.
+            writer
+                .start_file(
+                    "not_a_symlink",
+                    SimpleFileOptions::default().unix_permissions(0o120777),
+                )
+                .unwrap();
+            writer.write_all(b"/system/bin/sh").unwrap();
+            writer
+                .start_file("module.prop", SimpleFileOptions::default())
+                .unwrap();
+            writer
+                .write_all(b"id=com.example\nname=Test\nversion=1\nversionCode=1\n")
+                .unwrap();
+            writer.finish().unwrap();
+        }
+
+        data.set_position(0);
+        let report = validate_module_zip_from_reader(data).unwrap();
+        assert!(
+            !report
+                .issues
+                .iter()
+                .any(|i| i.check == "unsupported_entry_type")
+        );
+        assert!(report.is_valid(), "unexpected issues: {:?}", report.issues);
     }
 }

@@ -22,10 +22,12 @@
 #include "supercalls.h"
 #include "syscall_hook_manager.h"
 #include "kernel_umount.h"
+#include "ksu.h"
 
 static void ksu_install_manager_fd_tw_func(struct callback_head *cb)
 {
     ksu_install_fd();
+    ksu_task_work_complete();
     kfree(cb);
 }
 
@@ -37,8 +39,7 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
 
     pr_info("handle_setresuid from %d to %d\n", old_uid, new_uid);
 
-    if (likely(ksu_is_manager_appid_valid()) &&
-        unlikely(ksu_get_manager_appid() == new_uid % PER_USER_RANGE)) {
+    if (is_uid_manager(new_uid)) {
         spin_lock_irq(&current->sighand->siglock);
         ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
         ksu_set_task_tracepoint_flag(current);
@@ -49,7 +50,13 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
         if (!cb)
             return 0;
         cb->func = ksu_install_manager_fd_tw_func;
+        if (!ksu_task_work_prepare_enqueue()) {
+            kfree(cb);
+            pr_warn("install manager fd skip task_work while module is shutting down\n");
+            return 0;
+        }
         if (task_work_add(current, cb, TWA_RESUME)) {
+            ksu_task_work_complete();
             kfree(cb);
             pr_warn("install manager fd add task_work failed\n");
         }

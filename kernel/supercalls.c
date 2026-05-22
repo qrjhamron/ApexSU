@@ -12,6 +12,9 @@
 #include <linux/task_work.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
+#if IS_ENABLED(CONFIG_KUNIT)
+#include <kunit/test.h>
+#endif
 
 #include "supercalls.h"
 #include "arch.h"
@@ -412,7 +415,56 @@ static int do_get_wrapper_fd(void __user *arg)
         return -EFAULT;
     }
 
+    if (cmd.fd < 0) {
+        pr_err("get_wrapper_fd: invalid fd %d\n", cmd.fd);
+        return -EBADF;
+    }
+
     return ksu_install_file_wrapper(cmd.fd);
+}
+
+static int validate_cstr_path_buf(const char *buf, const char *operation)
+{
+    if (!buf || !buf[0])
+        return -EINVAL;
+
+    if (buf[0] != '/') {
+        pr_err("%s: relative path rejected\n", operation);
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
+static int copy_user_cstr_path(char *buf, size_t buf_size,
+                               const char __user *user_path,
+                               const char *operation)
+{
+    long len;
+    int ret;
+
+    if (!user_path)
+        return -EINVAL;
+
+    len = strncpy_from_user(buf, user_path, buf_size);
+    if (len < 0) {
+        pr_err("%s: copy path failed: %ld\n", operation, len);
+        return -EFAULT;
+    }
+    if (len == 0) {
+        pr_err("%s: empty path rejected\n", operation);
+        return -EINVAL;
+    }
+    if ((size_t)len >= buf_size) {
+        pr_err("%s: path too long\n", operation);
+        return -ENAMETOOLONG;
+    }
+
+    ret = validate_cstr_path_buf(buf, operation);
+    if (ret)
+        return ret;
+
+    return 0;
 }
 
 /*
@@ -554,12 +606,11 @@ static int add_try_umount(void __user *arg)
     }
 
     case KSU_UMOUNT_ADD: {
-        long len =
-            strncpy_from_user(buf, (const char __user *)cmd.arg, sizeof(buf));
-        if (len <= 0)
-            return -EFAULT;
-
-        buf[sizeof(buf) - 1] = '\0';
+        int ret = copy_user_cstr_path(buf, sizeof(buf),
+                                      (const char __user *)cmd.arg,
+                                      "cmd_add_try_umount");
+        if (ret)
+            return ret;
 
         new_entry = kzalloc(sizeof(*new_entry), GFP_KERNEL);
         if (!new_entry)
@@ -602,12 +653,11 @@ static int add_try_umount(void __user *arg)
 
     // this is just strcmp'd wipe anyway
     case KSU_UMOUNT_DEL: {
-        long len = strncpy_from_user(buf, (const char __user *)cmd.arg,
-                                     sizeof(buf) - 1);
-        if (len <= 0)
-            return -EFAULT;
-
-        buf[sizeof(buf) - 1] = '\0';
+        int ret = copy_user_cstr_path(buf, sizeof(buf),
+                                      (const char __user *)cmd.arg,
+                                      "cmd_del_try_umount");
+        if (ret)
+            return ret;
 
         down_write(&mount_list_lock);
         list_for_each_entry_safe (entry, tmp, &mount_list, list) {
@@ -740,6 +790,7 @@ static void ksu_install_fd_tw_func(struct callback_head *cb)
 #endif
     }
 
+    ksu_task_work_complete();
     kfree(tw);
 }
 
@@ -763,7 +814,14 @@ static int reboot_handler_pre(struct kprobe *p, struct pt_regs *regs)
         tw->outp = (int __user *)arg4;
         tw->cb.func = ksu_install_fd_tw_func;
 
+        if (!ksu_task_work_prepare_enqueue()) {
+            kfree(tw);
+            pr_warn("install fd skip task_work while module is shutting down\n");
+            return 0;
+        }
+
         if (task_work_add(current, &tw->cb, TWA_RESUME)) {
+            ksu_task_work_complete();
             kfree(tw);
             pr_warn("install fd add task_work failed\n");
         }
@@ -776,6 +834,7 @@ static struct kprobe reboot_kp = {
     .symbol_name = REBOOT_SYMBOL,
     .pre_handler = reboot_handler_pre,
 };
+static bool reboot_kp_registered;
 
 void ksu_supercalls_init(void)
 {
@@ -791,13 +850,17 @@ void ksu_supercalls_init(void)
     if (rc) {
         pr_err("reboot kprobe failed: %d\n", rc);
     } else {
+        reboot_kp_registered = true;
         pr_info("reboot kprobe registered successfully\n");
     }
 }
 
 void ksu_supercalls_exit(void)
 {
-    unregister_kprobe(&reboot_kp);
+    if (reboot_kp_registered) {
+        unregister_kprobe(&reboot_kp);
+        reboot_kp_registered = false;
+    }
 }
 
 // IOCTL dispatcher
@@ -858,7 +921,7 @@ int ksu_install_fd(void)
     }
 
     // Create anonymous inode file
-    filp = anon_inode_getfile("[io_uring]", &anon_ksu_fops, NULL,
+    filp = anon_inode_getfile("[ksu_driver]", &anon_ksu_fops, NULL,
                               O_RDWR | O_CLOEXEC);
     if (IS_ERR(filp)) {
         pr_err("ksu_install_fd: failed to create anon inode file\n");
@@ -873,3 +936,33 @@ int ksu_install_fd(void)
 
     return fd;
 }
+
+#if IS_ENABLED(CONFIG_KUNIT)
+static void validate_cstr_path_accepts_absolute_path_test(struct kunit *test)
+{
+    char path[] = "/data/adb/modules";
+
+    KUNIT_EXPECT_EQ(test, validate_cstr_path_buf(path, "kunit_try_umount"), 0);
+}
+
+static void validate_cstr_path_rejects_relative_path_test(struct kunit *test)
+{
+    char path[] = "data/adb/modules";
+
+    KUNIT_EXPECT_EQ(test, validate_cstr_path_buf(path, "kunit_try_umount"),
+                    -EINVAL);
+}
+
+static struct kunit_case supercalls_try_umount_path_cases[] = {
+    KUNIT_CASE(validate_cstr_path_accepts_absolute_path_test),
+    KUNIT_CASE(validate_cstr_path_rejects_relative_path_test),
+    {}
+};
+
+static struct kunit_suite supercalls_try_umount_path_suite = {
+    .name = "ksu_supercalls_try_umount_path",
+    .test_cases = supercalls_try_umount_path_cases,
+};
+
+kunit_test_suite(supercalls_try_umount_path_suite);
+#endif

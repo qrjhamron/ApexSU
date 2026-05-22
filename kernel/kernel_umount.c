@@ -89,6 +89,7 @@ static void umount_tw_func(struct callback_head *cb)
 
     revert_creds(saved);
 
+    ksu_task_work_complete();
     kfree(tw);
 }
 
@@ -141,8 +142,15 @@ int ksu_handle_umount(uid_t old_uid, uid_t new_uid)
 
     tw->cb.func = umount_tw_func;
 
+    if (!ksu_task_work_prepare_enqueue()) {
+        kfree(tw);
+        pr_warn("unmount skip task_work while module is shutting down\n");
+        return 0;
+    }
+
     int err = task_work_add(current, &tw->cb, TWA_RESUME);
     if (err) {
+        ksu_task_work_complete();
         kfree(tw);
         pr_warn("unmount add task_work failed\n");
     }

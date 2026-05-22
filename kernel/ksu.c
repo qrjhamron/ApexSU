@@ -4,6 +4,7 @@
 #include <linux/kobject.h>
 #include <linux/module.h>
 #include <linux/workqueue.h>
+#include <linux/atomic.h>
 
 #include "allowlist.h"
 #include "feature.h"
@@ -16,9 +17,43 @@
 #include "file_wrapper.h"
 
 struct cred *ksu_cred;
+static atomic_t ksu_module_shutting_down = ATOMIC_INIT(0);
+
+bool ksu_module_is_shutting_down(void)
+{
+    return atomic_read(&ksu_module_shutting_down) != 0;
+}
+
+bool ksu_task_work_prepare_enqueue(void)
+{
+#ifdef MODULE
+    if (unlikely(ksu_module_is_shutting_down()))
+        return false;
+
+    if (!try_module_get(THIS_MODULE))
+        return false;
+
+    if (unlikely(ksu_module_is_shutting_down())) {
+        module_put(THIS_MODULE);
+        return false;
+    }
+#endif
+    return true;
+}
+
+void ksu_task_work_complete(void)
+{
+#ifdef MODULE
+    module_put(THIS_MODULE);
+#endif
+}
 
 int __init kernelsu_init(void)
 {
+    int ret;
+
+    atomic_set(&ksu_module_shutting_down, 0);
+
 #ifdef CONFIG_KSU_DEBUG
     pr_alert("*************************************************************");
     pr_alert("**     NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE    **");
@@ -44,7 +79,19 @@ int __init kernelsu_init(void)
 
     ksu_throne_tracker_init();
 
-    ksu_ksud_init();
+    ret = ksu_ksud_init();
+    if (ret) {
+        pr_err("ksud init failed: %d\n", ret);
+        atomic_set(&ksu_module_shutting_down, 1);
+        ksu_throne_tracker_exit();
+        ksu_syscall_hook_manager_exit();
+        ksu_allowlist_exit();
+        ksu_supercalls_exit();
+        ksu_feature_exit();
+        if (ksu_cred)
+            put_cred(ksu_cred);
+        return ret;
+    }
 
     ksu_file_wrapper_init();
 
@@ -59,15 +106,17 @@ int __init kernelsu_init(void)
 extern void ksu_observer_exit(void);
 void kernelsu_exit(void)
 {
-    ksu_allowlist_exit();
-
-    ksu_throne_tracker_exit();
-
-    ksu_observer_exit();
+    atomic_set(&ksu_module_shutting_down, 1);
 
     ksu_ksud_exit();
 
+    ksu_observer_exit();
+
+    ksu_throne_tracker_exit();
+
     ksu_syscall_hook_manager_exit();
+
+    ksu_allowlist_exit();
 
     ksu_supercalls_exit();
 

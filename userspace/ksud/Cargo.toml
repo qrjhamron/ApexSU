@@ -33,6 +33,10 @@ zip = { version = "7", features = [
     "xz",
 ], default-features = false }
 
+[dev-dependencies]
+derive-new = "0.7"
+nom = "8"
+
 [target.'cfg(target_os = "android")'.dependencies]
 rustix = { version = "1", features = [
     "all-apis",

@@ -1,0 +1,9 @@
+[package]
+name = "apexsu-kernel-abi-checker"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0"
+
+[lib]
+name = "apexsu_kernel_abi_checker"
+path = "src/lib.rs"

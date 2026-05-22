@@ -40,3 +40,7 @@ SECURITY_AUDIT.md
 # Agent config
 CLAUDE.md
 AGENTS.md
+
+# Local environment secrets
+.env
+.env.*
