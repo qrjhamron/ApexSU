@@ -61,7 +61,8 @@ The kernel module and userspace communicate through a custom anonymous inode:
    - Magic `0xCAFEBABE` → scan for driver FD
 3. All commands are sent as IOCTLs with magic byte `'K'` (0x4B)
 
-This design provides stealth — no filesystem entries to detect.
+This design minimizes exposed interfaces and keeps the control channel scoped to
+trusted runtime paths.
 
 ## Root Grant Flow
 
@@ -158,6 +159,17 @@ User selects ZIP in Manager
 | 17 | `NUKE_EXT4_SYSFS` | W | Remove ext4 sysfs exposure |
 | 18 | `ADD_TRY_UMOUNT` | W | Manage unmount list |
 
+## ABI Compatibility Expectations
+
+- Userspace and kernel IOCTL structs must remain byte-identical.
+- `KSU_IOCTL_ABI_VERSION` in kernel headers tracks contract revisions.
+- `KSU_IOCTL_GET_ALLOW_LIST` / `KSU_IOCTL_GET_DENY_LIST` are deprecated and kept only for compatibility.
+- New userspace callers must prefer `KSU_IOCTL_NEW_GET_ALLOW_LIST` / `KSU_IOCTL_NEW_GET_DENY_LIST`.
+- Any struct layout change requires:
+  1. versioned migration handling in userspace
+  2. explicit compatibility fallback path
+  3. tests validating struct sizes/offsets
+
 ## Component Responsibilities
 
 ### Kernel Module (`kernel/`) — C
@@ -195,7 +207,7 @@ User selects ZIP in Manager
 4. **Persistence**: Allowlist saved to `/data/adb/ksu/.allowlist` with atomic writes
 5. **Isolation**: Per-app mount namespace separation
 6. **Policy**: SELinux domain transition for root processes
-7. **Stealth**: No filesystem entries, sanitized log output, blanked module metadata
+7. **Auditability**: explicit validation and diagnostics for privileged flows
 
 ## Directory Layout
 
