@@ -6,6 +6,7 @@
 #include <linux/slab.h>
 #include <linux/rculist.h>
 #include <linux/version.h>
+#include <linux/mutex.h>
 #include "klog.h" // IWYU pragma: keep
 #include "throne_tracker.h"
 
@@ -20,6 +21,8 @@ struct watch_dir {
 };
 
 static struct fsnotify_group *g;
+static bool observer_initialized;
+static DEFINE_MUTEX(observer_lock);
 
 static int ksu_handle_inode_event(struct fsnotify_mark *mark, u32 mask,
                                   struct inode *inode, struct inode *dir,
@@ -84,7 +87,7 @@ static int watch_one_dir(struct watch_dir *wd)
 
 static void unwatch_one_dir(struct watch_dir *wd)
 {
-    if (wd->mark) {
+    if (wd->mark && g && !IS_ERR(g)) {
         fsnotify_destroy_mark(wd->mark, g);
         fsnotify_put_mark(wd->mark);
         wd->mark = NULL;
@@ -102,26 +105,71 @@ static void unwatch_one_dir(struct watch_dir *wd)
 static struct watch_dir g_watch = { .path = "/data/system",
                                     .mask = MASK_SYSTEM };
 
+static struct fsnotify_group *ksu_fsnotify_alloc_group(void)
+{
+#ifdef FSNOTIFY_GROUP_USER
+    return fsnotify_alloc_group(&ksu_ops, 0);
+#else
+    return fsnotify_alloc_group(&ksu_ops);
+#endif
+}
+
 int ksu_observer_init(void)
 {
     int ret = 0;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-    g = fsnotify_alloc_group(&ksu_ops, 0);
-#else
-    g = fsnotify_alloc_group(&ksu_ops);
-#endif
-    if (IS_ERR(g))
-        return PTR_ERR(g);
+    mutex_lock(&observer_lock);
+    if (observer_initialized) {
+        mutex_unlock(&observer_lock);
+        return 0;
+    }
+
+    g = NULL;
+    g = ksu_fsnotify_alloc_group();
+    if (IS_ERR(g)) {
+        ret = PTR_ERR(g);
+        g = NULL;
+        pr_err("observer init: fsnotify_alloc_group failed: %d\n", ret);
+        mutex_unlock(&observer_lock);
+        return ret;
+    }
 
     ret = watch_one_dir(&g_watch);
+    if (ret) {
+        unwatch_one_dir(&g_watch);
+        fsnotify_put_group(g);
+        g = NULL;
+        pr_err("observer init: watch setup failed: %d\n", ret);
+        mutex_unlock(&observer_lock);
+        return ret;
+    }
+    observer_initialized = true;
     pr_info("observer init done\n");
+    mutex_unlock(&observer_lock);
     return 0;
 }
 
 void ksu_observer_exit(void)
 {
+    mutex_lock(&observer_lock);
+    if (!observer_initialized) {
+        if (g && !IS_ERR(g)) {
+            fsnotify_put_group(g);
+            g = NULL;
+        }
+        mutex_unlock(&observer_lock);
+        return;
+    }
+
     unwatch_one_dir(&g_watch);
-    fsnotify_put_group(g);
+    if (g && !IS_ERR(g)) {
+        fsnotify_put_group(g);
+        g = NULL;
+    }
+    observer_initialized = false;
+    memset(&g_watch.kpath, 0, sizeof(g_watch.kpath));
+    g_watch.inode = NULL;
+    g_watch.mark = NULL;
+    mutex_unlock(&observer_lock);
     pr_info("observer exit done\n");
 }

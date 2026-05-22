@@ -374,6 +374,12 @@ int get_pkg_from_apk_path(char *pkg, const char *path)
  * is_manager_apk - Check if the APK at path is the manager.
  * @path: filesystem path to the APK
  *
+ * Trust model: callers must only pass package-manager-owned /data/app APK
+ * paths whose package name is present in packages.list. This function checks
+ * the APK package name when KSU_MANAGER_PACKAGE is configured and verifies the
+ * expected signing-certificate digest from the APK v2 signing block. It is not
+ * a general-purpose APK verifier for arbitrary untrusted files.
+ *
  * Returns: 1 if this is the manager APK, 0 if definitely not,
  *          -1 on error (file unreadable, could not determine).
  */

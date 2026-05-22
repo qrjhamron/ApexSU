@@ -210,15 +210,16 @@ struct KsuSetAppProfileCmd {
 // Driver FD management
 // ---------------------------------------------------------------------------
 
-/// Cached file-descriptor of the `[io_uring]` anon-inode (stealth name).
+/// Cached file-descriptor of the KernelSU anon-inode.
 static DRIVER_FD: AtomicI32 = AtomicI32::new(-1);
 
 /// Cached version info so we only query once.
 static CACHED_VERSION: AtomicI32 = AtomicI32::new(0);
 static CACHED_FLAGS: AtomicI32 = AtomicI32::new(0);
 
+const KSU_DRIVER_FD_NAME: &str = "[ksu_driver]";
+
 /// Scan `/proc/self/fd` for the KernelSU driver anon-inode link.
-/// The kernel registers it as `[io_uring]` for stealth.
 fn scan_driver_fd() -> i32 {
     let dir = match std::fs::read_dir("/proc/self/fd") {
         Ok(d) => d,
@@ -245,7 +246,7 @@ fn scan_driver_fd() -> i32 {
         };
 
         let target_str = target.to_string_lossy();
-        if target_str.contains("[io_uring]") {
+        if target_str.contains(KSU_DRIVER_FD_NAME) {
             return fd_num;
         }
     }

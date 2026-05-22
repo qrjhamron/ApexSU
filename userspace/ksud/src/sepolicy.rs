@@ -9,7 +9,9 @@ use nom::{
     character::complete::{space0, space1},
     combinator::map,
 };
-use std::{ffi, path::Path, vec};
+#[cfg(target_os = "android")]
+use std::ffi;
+use std::{path::Path, vec};
 
 type SeObject<'a> = Vec<&'a str>;
 
@@ -389,7 +391,10 @@ enum PolicyObject {
 impl TryFrom<&str> for PolicyObject {
     type Error = anyhow::Error;
     fn try_from(s: &str) -> Result<Self> {
-        anyhow::ensure!(s.len() <= SEPOLICY_MAX_LEN, "policy object too long");
+        anyhow::ensure!(
+            s.len() < SEPOLICY_MAX_LEN,
+            "policy object too long: must leave room for NUL terminator"
+        );
         if s == "*" {
             return Ok(Self::All);
         }
@@ -488,7 +493,7 @@ impl<'a> TryFrom<&'a TypeState<'a>> for Vec<AtomicStatement> {
         let mut result = vec![];
         let subcmd = match perm.op {
             "permissive" => 1,
-            "enforcing" => 2,
+            "enforce" => 2,
             _ => 0,
         };
         for &t in &perm.stype {
@@ -656,6 +661,7 @@ impl<'a> TryFrom<&'a PolicyStatement<'a>> for Vec<AtomicStatement> {
 ///  for C FFI to call kernel interface
 ///////////////////////////////////////////////////////////////
 
+#[cfg(target_os = "android")]
 #[derive(Debug)]
 #[repr(C)]
 struct FfiPolicy {
@@ -670,6 +676,7 @@ struct FfiPolicy {
     sepol7: *const ffi::c_char,
 }
 
+#[cfg(target_os = "android")]
 const fn to_c_ptr(pol: &PolicyObject) -> *const ffi::c_char {
     match pol {
         PolicyObject::None | PolicyObject::All => std::ptr::null(),
@@ -677,6 +684,7 @@ const fn to_c_ptr(pol: &PolicyObject) -> *const ffi::c_char {
     }
 }
 
+#[cfg(target_os = "android")]
 impl From<AtomicStatement> for FfiPolicy {
     fn from(policy: AtomicStatement) -> Self {
         Self {
@@ -693,6 +701,7 @@ impl From<AtomicStatement> for FfiPolicy {
     }
 }
 
+#[cfg(target_os = "android")]
 fn apply_one_rule<'a>(statement: &'a PolicyStatement<'a>, strict: bool) -> Result<()> {
     let policies: Vec<AtomicStatement> = statement.try_into()?;
 
@@ -713,6 +722,7 @@ fn apply_one_rule<'a>(statement: &'a PolicyStatement<'a>, strict: bool) -> Resul
     Ok(())
 }
 
+#[cfg(target_os = "android")]
 pub fn live_patch(policy: &str) -> Result<()> {
     let result = parse_sepolicy(policy.trim(), false)?;
     for statement in result {
@@ -722,6 +732,7 @@ pub fn live_patch(policy: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "android")]
 pub fn apply_file<P: AsRef<Path>>(path: P) -> Result<()> {
     let input = std::fs::read_to_string(path)?;
     live_patch(&input)
@@ -736,4 +747,30 @@ pub fn check_rule(policy: &str) -> Result<()> {
     };
     parse_sepolicy(policy.trim(), true)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn policy_object_rejects_exact_max_len_token() {
+        let token = "a".repeat(SEPOLICY_MAX_LEN);
+        assert!(PolicyObject::try_from(token.as_str()).is_err());
+    }
+
+    #[test]
+    fn policy_object_accepts_token_with_nul_room() {
+        let token = "a".repeat(SEPOLICY_MAX_LEN - 1);
+        assert!(PolicyObject::try_from(token.as_str()).is_ok());
+    }
+
+    #[test]
+    fn enforce_statement_maps_to_enforce_subcommand() {
+        let statements = parse_sepolicy("enforce su_domain", true).unwrap();
+        let atomic: Vec<AtomicStatement> = (&statements[0]).try_into().unwrap();
+
+        assert_eq!(atomic[0].cmd, CMD_TYPE_STATE);
+        assert_eq!(atomic[0].subcmd, 2);
+    }
 }

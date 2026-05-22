@@ -42,7 +42,7 @@ mod module_validator;
 mod profile;
 #[cfg(target_os = "android")]
 mod restorecon;
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 mod sepolicy;
 #[cfg(target_os = "android")]
 mod su;

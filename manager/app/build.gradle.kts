@@ -157,4 +157,6 @@ dependencies {
     implementation(libs.backdrop)
     implementation(libs.capsule)
     implementation(libs.haze)
+
+    testImplementation(libs.junit4)
 }

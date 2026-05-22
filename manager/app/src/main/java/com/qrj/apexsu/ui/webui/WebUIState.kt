@@ -19,6 +19,7 @@ sealed class WebUIEvent {
     data class ShowConfirm(val message: String, val result: JsResult) : WebUIEvent()
     data class ShowPrompt(val message: String, val defaultValue: String, val result: JsPromptResult) : WebUIEvent()
     data class ShowFileChooser(val intent: Intent) : WebUIEvent()
+    data class ShowPrivilegedConfirm(val message: String) : WebUIEvent()
 }
 
 class WebUIState {
@@ -33,6 +34,7 @@ class WebUIState {
     var isInsetsEnabled by mutableStateOf(false)
     var webCanGoBack by mutableStateOf(false)
     var filePathCallback: android.webkit.ValueCallback<Array<Uri>>? = null
+    private var privilegedConfirmCallback: ((Boolean) -> Unit)? = null
 
     fun onAlertResult() {
         val event = uiEvent
@@ -66,6 +68,17 @@ class WebUIState {
 
     fun requestExit() {
         uiEvent = WebUIEvent.Close
+    }
+
+    fun requestPrivilegedConfirm(message: String, callback: (Boolean) -> Unit) {
+        privilegedConfirmCallback = callback
+        uiEvent = WebUIEvent.ShowPrivilegedConfirm(message)
+    }
+
+    fun onPrivilegedConfirmResult(confirmed: Boolean) {
+        privilegedConfirmCallback?.invoke(confirmed)
+        privilegedConfirmCallback = null
+        uiEvent = WebUIEvent.WebViewReady
     }
 
     fun dispose() {

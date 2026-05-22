@@ -85,6 +85,15 @@ jobs:
             echo "UPLOAD=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Validate release signing secrets
+        if: ${{ github.ref_type == 'tag' }}
+        run: |
+          test -n "${{ secrets.KEYSTORE }}" || { echo "Missing KEYSTORE secret for tagged release"; exit 1; }
+          test -n "${{ secrets.KEYSTORE_PASSWORD }}" || { echo "Missing KEYSTORE_PASSWORD secret"; exit 1; }
+          test -n "${{ secrets.KEY_ALIAS }}" || { echo "Missing KEY_ALIAS secret"; exit 1; }
+          test -n "${{ secrets.KEY_PASSWORD }}" || { echo "Missing KEY_PASSWORD secret"; exit 1; }
+          test -n "${{ secrets.APK_CERT_SHA256 }}" || { echo "Missing APK_CERT_SHA256 secret"; exit 1; }
+
       - name: Write key
         if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' )) || github.ref_type == 'tag' }}
         run: |
@@ -142,6 +151,19 @@ jobs:
 
       - name: Build with Gradle
         run: ./gradlew clean assembleRelease
+
+      - name: Verify APK signature
+        if: ${{ github.ref_type == 'tag' }}
+        run: |
+          APK=$(find ./app/build/outputs/apk/release -name "*.apk" | head -n1)
+          test -n "$APK" || { echo "No release APK produced"; exit 1; }
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -n1)
+          test -n "$APKSIGNER" || { echo "apksigner not found"; exit 1; }
+          "$APKSIGNER" verify --print-certs "$APK"
+          "$APKSIGNER" verify --print-certs "$APK" | grep -qi "${{ secrets.APK_CERT_SHA256 }}" || {
+            echo "APK signer certificate fingerprint does not match expected SHA256";
+            exit 1;
+          }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v6

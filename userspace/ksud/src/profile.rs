@@ -5,15 +5,17 @@ use crate::{defs, ksucalls, sepolicy};
 use anyhow::{Context, Result, anyhow};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
+use rand::RngCore;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const ALLOWLIST_ENC_PATH: &str = "/data/adb/ksu/.allowlist.enc";
 const KEY_FILE: &str = "/data/adb/ksu/.allowlist.key";
+const ALLOWLIST_FORMAT_V1: u8 = 1;
+const NONCE_SIZE: usize = 12;
 
 fn get_key() -> Result<[u8; 32]> {
     if !Path::new(KEY_FILE).exists() {
-        use rand::RngCore;
         let mut key = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut key);
         std::fs::write(KEY_FILE, key)?;
@@ -29,6 +31,73 @@ fn get_key() -> Result<[u8; 32]> {
     let mut file = std::fs::File::open(KEY_FILE)?;
     file.read_exact(&mut key)?;
     Ok(key)
+}
+
+fn encrypt_allowlist_payload(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>> {
+    let cipher = ChaCha20Poly1305::new(&(*key).into());
+    let mut nonce_buf = [0_u8; NONCE_SIZE];
+    rand::thread_rng().fill_bytes(&mut nonce_buf);
+    let nonce = Nonce::from_slice(&nonce_buf);
+    let ciphertext = cipher
+        .encrypt(nonce, data)
+        .map_err(|e| anyhow!("Encryption failed: {e}"))?;
+
+    let mut out = Vec::with_capacity(1 + NONCE_SIZE + ciphertext.len());
+    out.push(ALLOWLIST_FORMAT_V1);
+    out.extend_from_slice(&nonce_buf);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+fn decrypt_allowlist_payload(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>> {
+    let cipher = ChaCha20Poly1305::new(&(*key).into());
+    if data.len() > (1 + NONCE_SIZE) && data[0] == ALLOWLIST_FORMAT_V1 {
+        let nonce = Nonce::from_slice(&data[1..1 + NONCE_SIZE]);
+        return cipher
+            .decrypt(nonce, &data[1 + NONCE_SIZE..])
+            .map_err(|e| anyhow!("Decryption failed for v1 format: {e}"));
+    }
+
+    // Legacy compatibility path: previous format used a fixed zero nonce and
+    // stored ciphertext only. Keep read support so existing installs migrate
+    // automatically on next sync.
+    let nonce = Nonce::from_slice(&[0u8; NONCE_SIZE]);
+    cipher
+        .decrypt(nonce, data)
+        .map_err(|e| anyhow!("Decryption failed for legacy format: {e}"))
+}
+
+fn validate_identifier(kind: &str, value: &str) -> Result<()> {
+    if value.is_empty() {
+        return Err(anyhow!("{kind} cannot be empty"));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(anyhow!("{kind} contains control characters"));
+    }
+    if value.contains('/') || value.contains('\\') {
+        return Err(anyhow!("{kind} contains path separators"));
+    }
+    if value == "." || value == ".." || value.contains("..") {
+        return Err(anyhow!("{kind} contains forbidden traversal sequence"));
+    }
+    if Path::new(value).is_absolute() {
+        return Err(anyhow!("{kind} must not be absolute"));
+    }
+    Ok(())
+}
+
+fn confined_join(base: &str, kind: &str, value: &str) -> Result<PathBuf> {
+    validate_identifier(kind, value)?;
+    let base_path = Path::new(base);
+    ensure_dir_exists(base)?;
+    let canonical_base = std::fs::canonicalize(base_path)
+        .with_context(|| format!("Failed to canonicalize base path: {base}"))?;
+    let candidate = canonical_base.join(value);
+
+    if candidate.parent() != Some(canonical_base.as_path()) {
+        return Err(anyhow!("{kind} escaped base directory"));
+    }
+    Ok(candidate)
 }
 
 pub fn sync_allowlist() -> Result<()> {
@@ -65,14 +134,8 @@ pub fn sync_allowlist() -> Result<()> {
     }
 
     let key = get_key()?;
-    let cipher = ChaCha20Poly1305::new(&key.into());
-    let nonce = Nonce::from_slice(&[0u8; 12]); // In production use a random nonce and prepend to file
-
-    let ciphertext = cipher
-        .encrypt(nonce, data.as_slice())
-        .map_err(|e| anyhow!("Encryption failed: {e}"))?;
-
-    std::fs::write(ALLOWLIST_ENC_PATH, ciphertext)?;
+    let encrypted = encrypt_allowlist_payload(&key, data.as_slice())?;
+    std::fs::write(ALLOWLIST_ENC_PATH, encrypted)?;
     log::info!("Allowlist synced and encrypted to {ALLOWLIST_ENC_PATH}");
 
     Ok(())
@@ -86,12 +149,7 @@ pub fn load_allowlist() -> Result<()> {
 
     let key = get_key()?;
     let ciphertext = std::fs::read(ALLOWLIST_ENC_PATH)?;
-    let cipher = ChaCha20Poly1305::new(&key.into());
-    let nonce = Nonce::from_slice(&[0u8; 12]);
-
-    let data = cipher
-        .decrypt(nonce, ciphertext.as_slice())
-        .map_err(|e| anyhow!("Decryption failed: {e}"))?;
+    let data = decrypt_allowlist_payload(&key, ciphertext.as_slice())?;
 
     let profile_size = std::mem::size_of::<crate::ksu_types::AppProfile>();
     if data.len() % profile_size != 0 {
@@ -121,15 +179,14 @@ pub fn load_allowlist() -> Result<()> {
 }
 
 pub fn set_sepolicy(pkg: String, policy: String) -> Result<()> {
-    ensure_dir_exists(defs::PROFILE_SELINUX_DIR)?;
-    let policy_file = Path::new(defs::PROFILE_SELINUX_DIR).join(pkg);
+    let policy_file = confined_join(defs::PROFILE_SELINUX_DIR, "package", &pkg)?;
     std::fs::write(&policy_file, policy)?;
     sepolicy::apply_file(&policy_file)?;
     Ok(())
 }
 
 pub fn get_sepolicy(pkg: String) -> Result<()> {
-    let policy_file = Path::new(defs::PROFILE_SELINUX_DIR).join(pkg);
+    let policy_file = confined_join(defs::PROFILE_SELINUX_DIR, "package", &pkg)?;
     let policy = std::fs::read_to_string(policy_file)?;
     println!("{policy}");
     Ok(())
@@ -137,21 +194,20 @@ pub fn get_sepolicy(pkg: String) -> Result<()> {
 
 // ksud doesn't guarteen the correctness of template, it just save
 pub fn set_template(id: String, template: String) -> Result<()> {
-    ensure_dir_exists(defs::PROFILE_TEMPLATE_DIR)?;
-    let template_file = Path::new(defs::PROFILE_TEMPLATE_DIR).join(id);
+    let template_file = confined_join(defs::PROFILE_TEMPLATE_DIR, "template id", &id)?;
     std::fs::write(template_file, template)?;
     Ok(())
 }
 
 pub fn get_template(id: String) -> Result<()> {
-    let template_file = Path::new(defs::PROFILE_TEMPLATE_DIR).join(id);
+    let template_file = confined_join(defs::PROFILE_TEMPLATE_DIR, "template id", &id)?;
     let template = std::fs::read_to_string(template_file)?;
     println!("{template}");
     Ok(())
 }
 
 pub fn delete_template(id: String) -> Result<()> {
-    let template_file = Path::new(defs::PROFILE_TEMPLATE_DIR).join(id);
+    let template_file = confined_join(defs::PROFILE_TEMPLATE_DIR, "template id", &id)?;
     std::fs::remove_file(template_file)?;
     Ok(())
 }
@@ -169,6 +225,51 @@ pub fn list_templates() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn identifier_validation_rejects_traversal_and_separators() {
+        for bad in ["../a", "..", "a/../../b", "/abs", "a\\b", "", "."] {
+            assert!(validate_identifier("id", bad).is_err(), "{bad} should fail");
+        }
+        assert!(validate_identifier("id", "com.example.test").is_ok());
+        assert!(validate_identifier("id", "alpha_1-2").is_ok());
+    }
+
+    #[test]
+    fn allowlist_crypto_roundtrip_and_uniqueness() {
+        let key = [7u8; 32];
+        let plain = b"sample-profile-data";
+        let enc1 = encrypt_allowlist_payload(&key, plain).unwrap();
+        let enc2 = encrypt_allowlist_payload(&key, plain).unwrap();
+        assert_ne!(enc1, enc2, "nonce must randomize ciphertext");
+        let out = decrypt_allowlist_payload(&key, &enc1).unwrap();
+        assert_eq!(out, plain);
+    }
+
+    #[test]
+    fn allowlist_crypto_tamper_detected() {
+        let key = [3u8; 32];
+        let plain = b"sensitive";
+        let mut enc = encrypt_allowlist_payload(&key, plain).unwrap();
+        let last = enc.len() - 1;
+        enc[last] ^= 0x80;
+        assert!(decrypt_allowlist_payload(&key, &enc).is_err());
+    }
+
+    #[test]
+    fn allowlist_legacy_ciphertext_still_decrypts() {
+        let key = [9u8; 32];
+        let cipher = ChaCha20Poly1305::new(&key.into());
+        let nonce = Nonce::from_slice(&[0u8; NONCE_SIZE]);
+        let legacy = cipher.encrypt(nonce, b"legacy-data".as_slice()).unwrap();
+        let out = decrypt_allowlist_payload(&key, &legacy).unwrap();
+        assert_eq!(out, b"legacy-data");
+    }
 }
 
 pub fn apply_sepolies() -> Result<()> {

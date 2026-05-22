@@ -19,7 +19,7 @@ use std::{
     collections::HashMap,
     env::var as env_var,
     fs::{File, Permissions, canonicalize, remove_dir_all, set_permissions},
-    io::Cursor,
+    io::{Cursor, Read, Write},
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
@@ -541,11 +541,11 @@ fn install_module_to_system(zip: &str) -> Result<()> {
     ensure_clean_dir(&updated_dir)?;
     info!("target dir: {}", updated_dir.display());
 
-    // Extract zip to target directory
+    // Extract zip to target directory using a confinement-enforcing extractor.
     println!("- Extracting module files");
     let file = File::open(zip)?;
     let mut archive = zip::ZipArchive::new(file)?;
-    archive.extract(&updated_dir)?;
+    extract_zip_secure(&mut archive, &updated_dir)?;
 
     // Set permission and selinux context for $MOD/system
     let module_system_dir = updated_dir.join("system");
@@ -576,6 +576,84 @@ fn install_module_to_system(zip: &str) -> Result<()> {
     println!("- Module installed successfully!");
     info!("Module {module_id} installed successfully!");
 
+    Ok(())
+}
+
+fn secure_entry_destination(base: &Path, raw_name: &str) -> Result<PathBuf> {
+    let entry_path = Path::new(raw_name);
+    ensure!(
+        !entry_path.is_absolute(),
+        "ZIP entry uses absolute path: {raw_name}"
+    );
+
+    let mut rel = PathBuf::new();
+    for comp in entry_path.components() {
+        match comp {
+            std::path::Component::Normal(segment) => rel.push(segment),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                bail!("ZIP entry contains parent traversal: {raw_name}")
+            }
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => {
+                bail!("ZIP entry contains unsupported path prefix: {raw_name}")
+            }
+        }
+    }
+    ensure!(!rel.as_os_str().is_empty(), "ZIP entry path is empty");
+
+    let base_real = base
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize base: {}", base.display()))?;
+    let dest = base_real.join(&rel);
+    ensure!(
+        dest.starts_with(&base_real),
+        "ZIP entry escaped module directory: {raw_name}"
+    );
+    Ok(dest)
+}
+
+fn extract_zip_secure<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    target: &Path,
+) -> Result<()> {
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)?;
+        let name = entry.name().to_string();
+
+        if let Some(mode) = entry.unix_mode() {
+            let file_type = mode & 0o170000;
+            ensure!(file_type != 0o120000, "Symlink entry rejected: {name}");
+            ensure!(file_type != 0o060000, "Block device entry rejected: {name}");
+            ensure!(
+                file_type != 0o020000,
+                "Character device entry rejected: {name}"
+            );
+        }
+
+        let destination = secure_entry_destination(target, &name)?;
+
+        if entry.is_dir() || name.ends_with('/') {
+            std::fs::create_dir_all(&destination)?;
+            continue;
+        }
+
+        let Some(parent) = destination.parent() else {
+            bail!("Destination path missing parent: {}", destination.display());
+        };
+        std::fs::create_dir_all(parent)?;
+
+        let mut out = File::create(&destination)
+            .with_context(|| format!("Failed to create {}", destination.display()))?;
+        let mut buf = [0_u8; 8192];
+        loop {
+            let n = entry.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n])?;
+        }
+        out.flush()?;
+    }
     Ok(())
 }
 
@@ -911,6 +989,8 @@ pub fn get_managed_features() -> Result<HashMap<String, Vec<String>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write as _;
+    use zip::write::FileOptions;
 
     #[test]
     fn valid_module_ids() {
@@ -959,5 +1039,53 @@ mod tests {
 
         // Cleanup
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    fn write_zip(path: &Path, name: &str, content: &[u8], unix_mode: Option<u32>) {
+        let file = File::create(path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let mut options: FileOptions<'_, ()> = FileOptions::default();
+        if let Some(mode) = unix_mode {
+            options = options.unix_permissions(mode);
+        }
+        writer.start_file(name, options).unwrap();
+        writer.write_all(content).unwrap();
+        writer.finish().unwrap();
+    }
+
+    #[test]
+    fn secure_zip_rejects_parent_traversal_entry() {
+        let root = std::env::temp_dir().join(format!("apexsu_zip_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let zip_path = root.join("bad.zip");
+        write_zip(&zip_path, "../escape.txt", b"bad", None);
+        let target = root.join("out");
+        std::fs::create_dir_all(&target).unwrap();
+
+        let file = File::open(&zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let err = extract_zip_secure(&mut archive, &target).unwrap_err();
+        assert!(err.to_string().contains("parent traversal"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn secure_zip_rejects_symlink_entry() {
+        let root =
+            std::env::temp_dir().join(format!("apexsu_zip_test_symlink_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let zip_path = root.join("bad_symlink.zip");
+        // 0o120777: symbolic link in unix mode.
+        write_zip(&zip_path, "system/link", b"/system/bin/sh", Some(0o120777));
+        let target = root.join("out");
+        std::fs::create_dir_all(&target).unwrap();
+
+        let file = File::open(&zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let err = extract_zip_secure(&mut archive, &target).unwrap_err();
+        assert!(err.to_string().contains("Symlink entry rejected"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

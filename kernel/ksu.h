@@ -28,4 +28,8 @@ static inline int endswith(const char *s, const char *t)
 
 extern struct cred *ksu_cred;
 
+bool ksu_module_is_shutting_down(void);
+bool ksu_task_work_prepare_enqueue(void);
+void ksu_task_work_complete(void);
+
 #endif

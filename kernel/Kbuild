@@ -22,6 +22,12 @@ kernelsu-objs += selinux/rules.o
 ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include
 ccflags-y += -I$(objtree)/security/selinux -include $(srctree)/include/uapi/asm-generic/errno.h
 
+ifneq ($(CONFIG_KSU),)
+ifeq ($(wildcard $(srctree)/security/selinux/objsec.h),)
+$(error -- ApexSU: CONFIG_KSU=$(CONFIG_KSU) requires security/selinux/objsec.h from a full Android/GKI kernel source tree; distro header-only host builds are unsupported for strong module verification)
+endif
+endif
+
 obj-$(CONFIG_KSU) += kernelsu.o
 
 MDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
