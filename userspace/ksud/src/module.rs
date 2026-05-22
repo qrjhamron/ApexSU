@@ -4,6 +4,11 @@
 use crate::utils::*;
 use crate::{
     assets, defs, ksucalls, metamodule, module_validator,
+    module_lifecycle::{
+        PreservedFlags, cleanup_staged_dir, finalize_successful_promotion,
+        is_valid_active_module_id, mark_install_complete, promote_staged_module,
+        run_staging_transaction, should_promote_staged_module,
+    },
     restorecon::{restore_syscon, setsyscon},
     sepolicy,
 };
@@ -14,12 +19,12 @@ use is_executable::is_executable;
 use java_properties::PropertiesIter;
 use log::{debug, info, warn};
 
-use std::fs::{copy, rename};
+use std::fs::copy;
 use std::{
     collections::HashMap,
     env::var as env_var,
     fs::{File, Permissions, canonicalize, remove_dir_all, set_permissions},
-    io::Cursor,
+    io::{Cursor, Read, Write},
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
@@ -120,13 +125,28 @@ pub fn foreach_module(
             continue;
         }
 
-        if module_type == Active && path.join(defs::DISABLE_FILE_NAME).exists() {
-            info!("{} is disabled, skip", path.display());
-            continue;
-        }
-        if module_type == Active && path.join(defs::REMOVE_FILE_NAME).exists() {
-            warn!("{} is removed, skip", path.display());
-            continue;
+        if module_type == Active {
+            let Some(name) = entry.file_name().to_str().map(ToString::to_string) else {
+                warn!(
+                    "Active module directory has non-utf8 name, skip: {}",
+                    path.display()
+                );
+                continue;
+            };
+
+            if !is_valid_active_module_id(&name) {
+                warn!("Skipping invalid/internal module directory: {}", path.display());
+                continue;
+            }
+
+            if path.join(defs::DISABLE_FILE_NAME).exists() {
+                info!("{} is disabled, skip", path.display());
+                continue;
+            }
+            if path.join(defs::REMOVE_FILE_NAME).exists() {
+                warn!("{} is removed, skip", path.display());
+                continue;
+            }
         }
 
         f(&path)?;
@@ -384,25 +404,61 @@ pub fn handle_updated_modules() -> Result<()> {
 
         if let Some(name) = updated_module.file_name() {
             let module_dir = modules_root.join(name);
-            let mut disabled = false;
-            let mut removed = false;
-            if module_dir.exists() {
-                // If the old module is disabled, we need to also disable the new one
-                disabled = module_dir.join(defs::DISABLE_FILE_NAME).exists();
-                removed = module_dir.join(defs::REMOVE_FILE_NAME).exists();
-                remove_dir_all(&module_dir)?;
+            let Some(module_id) = name.to_str() else {
+                warn!(
+                    "Updated module directory has non-utf8 name, deleting staged dir: {}",
+                    updated_module.display()
+                );
+                cleanup_staged_dir(updated_module)?;
+                return Ok(());
+            };
+
+            if validate_module_id(module_id).is_err() {
+                warn!(
+                    "Updated module id is invalid, deleting staged dir: {}",
+                    updated_module.display()
+                );
+                cleanup_staged_dir(updated_module)?;
+                return Ok(());
             }
-            rename(updated_module, &module_dir)?;
-            if removed {
-                let path = module_dir.join(defs::REMOVE_FILE_NAME);
-                if let Err(e) = ensure_file_exists(&path) {
-                    warn!("Failed to create {}: {e}", path.display());
+
+            if !should_promote_staged_module(updated_module) {
+                warn!(
+                    "Skipping staged module without success marker: {}",
+                    updated_module.display()
+                );
+                cleanup_staged_dir(updated_module)?;
+                return Ok(());
+            }
+
+            let preserved_flags = PreservedFlags {
+                disabled: module_dir.join(defs::DISABLE_FILE_NAME).exists(),
+                removed: module_dir.join(defs::REMOVE_FILE_NAME).exists(),
+            };
+
+            let backup = promote_staged_module(updated_module, &module_dir)?;
+            if let Err(e) = finalize_successful_promotion(
+                &module_dir,
+                backup,
+                preserved_flags,
+                defs::DISABLE_FILE_NAME,
+                defs::REMOVE_FILE_NAME,
+            ) {
+                let disable_marker = module_dir.join(defs::DISABLE_FILE_NAME);
+                if let Err(disable_err) = ensure_file_exists(&disable_marker) {
+                    warn!(
+                        "Failed to place fail-closed disable marker after promotion finalization error for {}: {disable_err:#}",
+                        module_dir.display()
+                    );
                 }
-            } else if disabled {
-                let path = module_dir.join(defs::DISABLE_FILE_NAME);
-                if let Err(e) = ensure_file_exists(&path) {
-                    warn!("Failed to create {}: {e}", path.display());
-                }
+                warn!(
+                    "Promotion completed but post-promotion cleanup/flags failed for {}: {e:#}",
+                    module_dir.display()
+                );
+                return Err(anyhow!(
+                    "Fail-closed promotion finalization error for {}: {e:#}",
+                    module_dir.display()
+                ));
             }
         }
         Ok(())
@@ -536,46 +592,129 @@ fn install_module_to_system(zip: &str) -> Result<()> {
     ensure_dir_exists(defs::MODULE_UPDATE_DIR)?;
     setsyscon(defs::MODULE_UPDATE_DIR)?;
 
-    // Prepare target directory
-    println!("- Installing to {}", updated_dir.display());
-    ensure_clean_dir(&updated_dir)?;
-    info!("target dir: {}", updated_dir.display());
+    run_staging_transaction(&updated_dir, || {
+        // Prepare target directory
+        println!("- Installing to {}", updated_dir.display());
+        ensure_clean_dir(&updated_dir)?;
+        info!("target dir: {}", updated_dir.display());
 
-    // Extract zip to target directory
-    println!("- Extracting module files");
-    let file = File::open(zip)?;
-    let mut archive = zip::ZipArchive::new(file)?;
-    archive.extract(&updated_dir)?;
+        // Extract zip to target directory using a confinement-enforcing extractor.
+        println!("- Extracting module files");
+        let file = File::open(zip)?;
+        let mut archive = zip::ZipArchive::new(file)?;
+        extract_zip_secure(&mut archive, &updated_dir)?;
 
-    // Set permission and selinux context for $MOD/system
-    let module_system_dir = updated_dir.join("system");
-    if module_system_dir.exists() {
-        #[cfg(unix)]
-        set_permissions(&module_system_dir, Permissions::from_mode(0o755))?;
-        restore_syscon(&module_system_dir)?;
-    }
+        // Set permission and selinux context for $MOD/system
+        let module_system_dir = updated_dir.join("system");
+        if module_system_dir.exists() {
+            #[cfg(unix)]
+            set_permissions(&module_system_dir, Permissions::from_mode(0o755))?;
+            restore_syscon(&module_system_dir)?;
+        }
 
-    // Execute install script
-    println!("- Running module installer");
-    exec_install_script(zip, is_metamodule)?;
+        // Execute install script
+        println!("- Running module installer");
+        exec_install_script(zip, is_metamodule)?;
 
-    let module_dir = Path::new(MODULE_DIR).join(module_id);
-    ensure_dir_exists(&module_dir)?;
-    copy(
-        updated_dir.join("module.prop"),
-        module_dir.join("module.prop"),
-    )?;
-    ensure_file_exists(module_dir.join(UPDATE_FILE_NAME))?;
+        let module_dir = Path::new(MODULE_DIR).join(module_id);
+        ensure_dir_exists(&module_dir)?;
+        copy(
+            updated_dir.join("module.prop"),
+            module_dir.join("module.prop"),
+        )?;
+        ensure_file_exists(module_dir.join(UPDATE_FILE_NAME))?;
 
-    // Create symlink for metamodule
-    if is_metamodule {
-        println!("- Creating metamodule symlink");
-        metamodule::ensure_symlink(&module_dir)?;
-    }
+        // Create symlink for metamodule
+        if is_metamodule {
+            println!("- Creating metamodule symlink");
+            metamodule::ensure_symlink(&module_dir)?;
+        }
+
+        mark_install_complete(&updated_dir)?;
+        Ok(())
+    })?;
 
     println!("- Module installed successfully!");
     info!("Module {module_id} installed successfully!");
 
+    Ok(())
+}
+
+fn secure_entry_destination(base: &Path, raw_name: &str) -> Result<PathBuf> {
+    let entry_path = Path::new(raw_name);
+    ensure!(
+        !entry_path.is_absolute(),
+        "ZIP entry uses absolute path: {raw_name}"
+    );
+
+    let mut rel = PathBuf::new();
+    for comp in entry_path.components() {
+        match comp {
+            std::path::Component::Normal(segment) => rel.push(segment),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                bail!("ZIP entry contains parent traversal: {raw_name}")
+            }
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => {
+                bail!("ZIP entry contains unsupported path prefix: {raw_name}")
+            }
+        }
+    }
+    ensure!(!rel.as_os_str().is_empty(), "ZIP entry path is empty");
+
+    let base_real = base
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize base: {}", base.display()))?;
+    let dest = base_real.join(&rel);
+    ensure!(
+        dest.starts_with(&base_real),
+        "ZIP entry escaped module directory: {raw_name}"
+    );
+    Ok(dest)
+}
+
+fn extract_zip_secure<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    target: &Path,
+) -> Result<()> {
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)?;
+        let name = entry.name().to_string();
+
+        if let Some(mode) = entry.unix_mode() {
+            let file_type = mode & 0o170000;
+            ensure!(file_type != 0o120000, "Symlink entry rejected: {name}");
+            ensure!(file_type != 0o060000, "Block device entry rejected: {name}");
+            ensure!(
+                file_type != 0o020000,
+                "Character device entry rejected: {name}"
+            );
+        }
+
+        let destination = secure_entry_destination(target, &name)?;
+
+        if entry.is_dir() || name.ends_with('/') {
+            std::fs::create_dir_all(&destination)?;
+            continue;
+        }
+
+        let Some(parent) = destination.parent() else {
+            bail!("Destination path missing parent: {}", destination.display());
+        };
+        std::fs::create_dir_all(parent)?;
+
+        let mut out = File::create(&destination)
+            .with_context(|| format!("Failed to create {}", destination.display()))?;
+        let mut buf = [0_u8; 8192];
+        loop {
+            let n = entry.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n])?;
+        }
+        out.flush()?;
+    }
     Ok(())
 }
 
@@ -911,6 +1050,8 @@ pub fn get_managed_features() -> Result<HashMap<String, Vec<String>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write as _;
+    use zip::write::FileOptions;
 
     #[test]
     fn valid_module_ids() {
@@ -959,5 +1100,53 @@ mod tests {
 
         // Cleanup
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    fn write_zip(path: &Path, name: &str, content: &[u8], unix_mode: Option<u32>) {
+        let file = File::create(path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let mut options: FileOptions<'_, ()> = FileOptions::default();
+        if let Some(mode) = unix_mode {
+            options = options.unix_permissions(mode);
+        }
+        writer.start_file(name, options).unwrap();
+        writer.write_all(content).unwrap();
+        writer.finish().unwrap();
+    }
+
+    #[test]
+    fn secure_zip_rejects_parent_traversal_entry() {
+        let root = std::env::temp_dir().join(format!("apexsu_zip_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let zip_path = root.join("bad.zip");
+        write_zip(&zip_path, "../escape.txt", b"bad", None);
+        let target = root.join("out");
+        std::fs::create_dir_all(&target).unwrap();
+
+        let file = File::open(&zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let err = extract_zip_secure(&mut archive, &target).unwrap_err();
+        assert!(err.to_string().contains("parent traversal"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn secure_zip_rejects_symlink_entry() {
+        let root =
+            std::env::temp_dir().join(format!("apexsu_zip_test_symlink_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let zip_path = root.join("bad_symlink.zip");
+        // 0o120777: symbolic link in unix mode.
+        write_zip(&zip_path, "system/link", b"/system/bin/sh", Some(0o120777));
+        let target = root.join("out");
+        std::fs::create_dir_all(&target).unwrap();
+
+        let file = File::open(&zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let err = extract_zip_secure(&mut archive, &target).unwrap_err();
+        assert!(err.to_string().contains("Symlink entry rejected"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
