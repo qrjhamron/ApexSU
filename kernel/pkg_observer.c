@@ -7,6 +7,8 @@
 #include <linux/rculist.h>
 #include <linux/version.h>
 #include <linux/mutex.h>
+#include <linux/spinlock.h>
+#include <linux/workqueue.h>
 #include "klog.h" // IWYU pragma: keep
 #include "throne_tracker.h"
 
@@ -23,6 +25,79 @@ struct watch_dir {
 static struct fsnotify_group *g;
 static bool observer_initialized;
 static DEFINE_MUTEX(observer_lock);
+static DEFINE_SPINLOCK(pkg_workqueue_lock);
+static struct workqueue_struct *pkg_observer_wq;
+static bool pkg_observer_wq_stopping = true;
+
+static void pkg_observer_workfn(struct work_struct *work)
+{
+    track_throne(false);
+}
+
+static DECLARE_WORK(pkg_observer_work, pkg_observer_workfn);
+
+int ksu_pkg_observer_workqueue_init(void)
+{
+    struct workqueue_struct *wq;
+    unsigned long flags;
+
+    wq = alloc_ordered_workqueue("ksu_pkg_observer", WQ_MEM_RECLAIM);
+    if (!wq)
+        return -ENOMEM;
+
+    spin_lock_irqsave(&pkg_workqueue_lock, flags);
+    if (pkg_observer_wq) {
+        spin_unlock_irqrestore(&pkg_workqueue_lock, flags);
+        destroy_workqueue(wq);
+        return 0;
+    }
+    pkg_observer_wq = wq;
+    pkg_observer_wq_stopping = false;
+    spin_unlock_irqrestore(&pkg_workqueue_lock, flags);
+
+    return 0;
+}
+
+void ksu_pkg_observer_workqueue_exit(void)
+{
+    struct workqueue_struct *wq;
+    unsigned long flags;
+
+    spin_lock_irqsave(&pkg_workqueue_lock, flags);
+    wq = pkg_observer_wq;
+    pkg_observer_wq_stopping = true;
+    spin_unlock_irqrestore(&pkg_workqueue_lock, flags);
+
+    cancel_work_sync(&pkg_observer_work);
+
+    if (wq)
+        destroy_workqueue(wq);
+
+    spin_lock_irqsave(&pkg_workqueue_lock, flags);
+    if (pkg_observer_wq == wq)
+        pkg_observer_wq = NULL;
+    spin_unlock_irqrestore(&pkg_workqueue_lock, flags);
+}
+
+static void queue_pkg_observer_work(void)
+{
+    struct workqueue_struct *wq;
+    unsigned long flags;
+    bool queued;
+
+    spin_lock_irqsave(&pkg_workqueue_lock, flags);
+    wq = pkg_observer_wq;
+    if (!wq || pkg_observer_wq_stopping) {
+        spin_unlock_irqrestore(&pkg_workqueue_lock, flags);
+        pr_debug("pkg observer workqueue is not available\n");
+        return;
+    }
+    queued = queue_work(wq, &pkg_observer_work);
+    spin_unlock_irqrestore(&pkg_workqueue_lock, flags);
+
+    if (!queued)
+        pr_debug("pkg observer work already pending\n");
+}
 
 static int ksu_handle_inode_event(struct fsnotify_mark *mark, u32 mask,
                                   struct inode *inode, struct inode *dir,
@@ -34,7 +109,7 @@ static int ksu_handle_inode_event(struct fsnotify_mark *mark, u32 mask,
         return 0;
     if (file_name->len == 13 && !memcmp(file_name->name, "packages.list", 13)) {
         pr_info("packages.list detected: %d\n", mask);
-        track_throne(false);
+        queue_pkg_observer_work();
     }
     return 0;
 }
@@ -122,6 +197,12 @@ int ksu_observer_init(void)
     if (observer_initialized) {
         mutex_unlock(&observer_lock);
         return 0;
+    }
+
+    if (!pkg_observer_wq) {
+        mutex_unlock(&observer_lock);
+        pr_err("observer init: workqueue is not initialized\n");
+        return -ENOMEM;
     }
 
     g = NULL;

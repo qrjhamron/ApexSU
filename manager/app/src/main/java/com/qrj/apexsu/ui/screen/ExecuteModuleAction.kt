@@ -46,6 +46,7 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,7 +76,6 @@ import java.util.Locale
 fun ExecuteModuleActionScreen(moduleId: String) {
     val navigator = LocalNavigator.current
     var text by rememberSaveable { mutableStateOf("") }
-    var tempText: String
     val logContent = rememberSaveable { StringBuilder() }
     val context = LocalContext.current
     val activity = LocalActivity.current
@@ -130,25 +130,31 @@ fun ExecuteModuleActionScreen(moduleId: String) {
             exitExecute()
             return@LaunchedEffect
         }
-        withContext(Dispatchers.IO) {
+        val output = Channel<String>(Channel.UNLIMITED)
+        val collector = launch {
+            for (line in output) {
+                val next = "$line\n"
+                if (next.startsWith("[H[J")) { // clear command
+                    text = next.substring(6)
+                } else {
+                    text += next
+                }
+                logContent.append(line).append("\n")
+            }
+        }
+        actionResult = withContext(Dispatchers.IO) {
             runModuleAction(
                 moduleId = moduleId,
                 onStdout = {
-                    tempText = "$it\n"
-                    if (tempText.startsWith("[H[J")) { // clear command
-                        text = tempText.substring(6)
-                    } else {
-                        text += tempText
-                    }
-                    logContent.append(it).append("\n")
+                    output.trySend(it)
                 },
                 onStderr = {
-                    logContent.append(it).append("\n")
+                    output.trySend(it)
                 }
-            ).let {
-                actionResult = it
-            }
+            )
         }
+        output.close()
+        collector.join()
         if (actionResult) {
             if (fromShortcut) {
                 Toast.makeText(
@@ -174,7 +180,7 @@ fun ExecuteModuleActionScreen(moduleId: String) {
                             "ApexSU_module_action_log_${date}.log"
                         )
                         file.writeText(logContent.toString())
-                        Toast.makeText(context, "Log saved to ${file.absolutePath}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.log_saved_to, file.absolutePath), Toast.LENGTH_SHORT).show()
                     }
                 },
                 hazeState = hazeState,

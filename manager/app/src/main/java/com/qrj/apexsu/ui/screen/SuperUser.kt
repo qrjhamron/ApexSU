@@ -334,7 +334,24 @@ fun SuperUserPager(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    InfiniteProgressIndicator()
+                    if (viewModel.isRefreshing) {
+                        InfiniteProgressIndicator()
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.superuser_empty_title),
+                                fontWeight = FontWeight.SemiBold,
+                                color = colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.superuser_empty_body),
+                                color = colorScheme.onSurfaceVariantSummary
+                            )
+                        }
+                    }
                 }
             } else {
                 val filteredApps = remember(SuperUserViewModel.apps) {
@@ -579,6 +596,15 @@ private fun GroupItem(
                         .basicMarquee(),
                     fontSize = 12.sp,
                     fontWeight = FontWeight(550),
+                    color = colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Text(
+                    text = stringResource(R.string.superuser_last_access_unknown),
+                    modifier = Modifier.basicMarquee(),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
                     color = colorScheme.onSurfaceVariantSummary,
                     maxLines = 1,
                     softWrap = false

@@ -160,7 +160,7 @@ void escape_with_root_profile(void)
     // we add it here but don't add it to cap_inhertiable, it would be dropped automaticly after exec!
     u64 cap_for_ksud = profile.capabilities.effective | CAP_DAC_READ_SEARCH;
     memcpy(&cred->cap_effective, &cap_for_ksud, sizeof(cred->cap_effective));
-    memcpy(&cred->cap_permitted, &profile.capabilities.effective,
+    memcpy(&cred->cap_permitted, &cap_for_ksud,
            sizeof(cred->cap_permitted));
     memcpy(&cred->cap_bset, &profile.capabilities.effective,
            sizeof(cred->cap_bset));

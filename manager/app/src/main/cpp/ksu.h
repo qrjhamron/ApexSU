@@ -176,12 +176,4 @@ bool is_kernel_umount_enabled();
 
 bool get_allow_list(struct ksu_new_get_allow_list_cmd *);
 
-inline std::pair<int, int> legacy_get_info() {
-    int32_t version = -1;
-    int32_t flags = 0;
-    int32_t result = 0;
-    prctl(0xDEADBEEF, 2, &version, &flags, &result);
-    return {version, flags};
-}
-
 #endif //KERNELSU_KSU_H

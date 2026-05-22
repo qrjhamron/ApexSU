@@ -58,7 +58,9 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.qrj.apexsu.Natives
 import com.qrj.apexsu.R
 import com.qrj.apexsu.ui.component.AppIconImage
@@ -91,6 +93,7 @@ import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.extra.SuperDropdown
 import top.yukonga.miuix.kmp.extra.SuperListPopup
 import top.yukonga.miuix.kmp.extra.SuperSwitch
@@ -148,12 +151,51 @@ fun AppProfileScreen(
             ?: ""
     }
 
-    val initialProfile = Natives.getAppProfile(packageName, uid)
-    if (initialProfile.allowSu) {
-        initialProfile.rules = getSepolicy(packageName)
+    var profile by rememberSaveable(packageName, uid) {
+        mutableStateOf(Natives.Profile(packageName))
     }
-    var profile by rememberSaveable {
-        mutableStateOf(initialProfile)
+    var profileLoaded by remember(packageName, uid) { mutableStateOf(false) }
+    var updatingProfile by remember { mutableStateOf(false) }
+    LaunchedEffect(packageName, uid) {
+        val loadedProfile = withContext(Dispatchers.IO) {
+            Natives.getAppProfile(packageName, uid).apply {
+                if (allowSu) {
+                    rules = getSepolicy(packageName)
+                }
+            }
+        }
+        profile = loadedProfile
+        profileLoaded = true
+    }
+
+    if (!profileLoaded) {
+        Scaffold(
+            topBar = {
+                TopBar(
+                    onBack = dropUnlessResumed { navigator.pop() },
+                    packageName = packageName,
+                    showActions = !isUidGroup,
+                    scrollBehavior = scrollBehavior,
+                    hazeState = hazeState,
+                    hazeStyle = hazeStyle,
+                    enableBlur = enableBlur,
+                )
+            },
+            popupHost = { },
+            contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout)
+                .only(WindowInsetsSides.Horizontal)
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(innerPadding),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(Modifier.height(32.dp))
+                InfiniteProgressIndicator()
+            }
+        }
+        return
     }
 
     Scaffold(
@@ -211,22 +253,57 @@ fun AppProfileScreen(
                         }
                     },
                     onManageTemplate = { navigator.push(Route.AppProfileTemplate) },
-                    onProfileChange = {
+                    onProfileChange = { requestedProfile ->
                         scope.launch {
-                            if (it.allowSu) {
-                                if (uid < 2000 && uid != 1000) {
-                                    Toast.makeText(context, suNotAllowed, Toast.LENGTH_SHORT).show()
-                                    return@launch
-                                }
-                                if (!it.rootUseDefault && it.rules.isNotEmpty() && !setSepolicy(profile.name, it.rules)) {
-                                    Toast.makeText(context, failToUpdateSepolicy, Toast.LENGTH_SHORT).show()
-                                    return@launch
-                                }
+                            if (updatingProfile) {
+                                return@launch
                             }
-                            if (!Natives.setAppProfile(it)) {
-                                Toast.makeText(context, failToUpdateAppProfile, Toast.LENGTH_SHORT).show()
-                            } else {
-                                profile = it
+                            updatingProfile = true
+                            val updateResult = withContext(Dispatchers.IO) {
+                                if (requestedProfile.allowSu) {
+                                    if (uid < 2000 && uid != 1000) {
+                                        return@withContext "SU_NOT_ALLOWED" to null
+                                    }
+                                    if (!requestedProfile.rootUseDefault &&
+                                        requestedProfile.rules.isNotEmpty() &&
+                                        !setSepolicy(packageName, requestedProfile.rules)
+                                    ) {
+                                        return@withContext "SEPOLICY_FAILED" to null
+                                    }
+                                }
+                                if (!Natives.setAppProfile(requestedProfile)) {
+                                    return@withContext "PROFILE_UPDATE_FAILED" to null
+                                }
+
+                                val refreshed = Natives.getAppProfile(packageName, uid).apply {
+                                    if (allowSu) {
+                                        rules = getSepolicy(packageName)
+                                    }
+                                }
+                                "OK" to refreshed
+                            }
+                            updatingProfile = false
+                            when (updateResult.first) {
+                                "SU_NOT_ALLOWED" -> {
+                                    Toast.makeText(context, suNotAllowed, Toast.LENGTH_SHORT).show()
+                                }
+
+                                "SEPOLICY_FAILED" -> {
+                                    Toast.makeText(context, failToUpdateSepolicy, Toast.LENGTH_SHORT).show()
+                                }
+
+                                "PROFILE_UPDATE_FAILED" -> {
+                                    Toast.makeText(context, failToUpdateAppProfile, Toast.LENGTH_SHORT).show()
+                                }
+
+                                "OK" -> {
+                                    val applied = updateResult.second
+                                    if (applied == null) {
+                                        Toast.makeText(context, failToUpdateAppProfile, Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        profile = applied
+                                    }
+                                }
                             }
                         }
                     },

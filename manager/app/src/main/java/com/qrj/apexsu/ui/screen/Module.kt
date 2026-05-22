@@ -582,8 +582,26 @@ fun ModulePager(
                             ) {
                                 ListPopupColumn {
                                     DropdownImpl(
+                                        text = stringResource(R.string.module_sort_name),
+                                        optionSize = 3,
+                                        isSelected = !viewModel.sortActionFirst && !viewModel.sortEnabledFirst,
+                                        onSelectedIndexChange = {
+                                            viewModel.sortActionFirst = false
+                                            viewModel.sortEnabledFirst = false
+                                            prefs.edit {
+                                                putBoolean("module_sort_action_first", false)
+                                                putBoolean("module_sort_enabled_first", false)
+                                            }
+                                            scope.launch {
+                                                viewModel.fetchModuleList()
+                                            }
+                                            showTopPopup.value = false
+                                        },
+                                        index = 0
+                                    )
+                                    DropdownImpl(
                                         text = stringResource(R.string.module_sort_action_first),
-                                        optionSize = 2,
+                                        optionSize = 3,
                                         isSelected = viewModel.sortActionFirst,
                                         onSelectedIndexChange = {
                                             viewModel.sortActionFirst = !viewModel.sortActionFirst
@@ -595,11 +613,11 @@ fun ModulePager(
                                             }
                                             showTopPopup.value = false
                                         },
-                                        index = 0
+                                        index = 1
                                     )
                                     DropdownImpl(
                                         text = stringResource(R.string.module_sort_enabled_first),
-                                        optionSize = 2,
+                                        optionSize = 3,
                                         isSelected = viewModel.sortEnabledFirst,
                                         onSelectedIndexChange = {
                                             viewModel.sortEnabledFirst = !viewModel.sortEnabledFirst
@@ -611,7 +629,7 @@ fun ModulePager(
                                             }
                                             showTopPopup.value = false
                                         },
-                                        index = 1
+                                        index = 2
                                     )
                                 }
                             }
@@ -898,7 +916,7 @@ fun ModulePager(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TextButton(
-                    text = "Action",
+                    text = stringResource(R.string.action),
                     onClick = {
                         showShortcutTypeDialog.value = false
                         openShortcutDialogForType(ShortcutType.Action)
@@ -906,7 +924,7 @@ fun ModulePager(
                     modifier = Modifier.fillMaxWidth()
                 )
                 TextButton(
-                    text = "WebUI",
+                    text = stringResource(R.string.open),
                     onClick = {
                         showShortcutTypeDialog.value = false
                         openShortcutDialogForType(ShortcutType.WebUI)
@@ -1312,6 +1330,21 @@ fun ModuleItem(
                     color = colorScheme.onSurfaceVariantSummary,
                     textDecoration = textDecoration
                 )
+                AnimatedVisibility(visible = hasUpdate) {
+                    Text(
+                        text = stringResource(R.string.module_update_available),
+                        fontSize = 12.sp,
+                        color = updateTint,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .clip(ContinuousRoundedRectangle(6.dp))
+                            .background(updateBg)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        fontWeight = FontWeight(650),
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
             }
             Switch(
                 enabled = !module.update,

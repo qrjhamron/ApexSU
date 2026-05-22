@@ -268,6 +268,12 @@ struct apk_path_hash {
     struct list_head list;
 };
 
+struct apk_candidate {
+    char apkpath[DATA_PATH_LEN];
+    unsigned int hash;
+    struct list_head list;
+};
+
 static struct list_head apk_path_hash_list = LIST_HEAD_INIT(apk_path_hash_list);
 
 static void clear_apk_path_hash_cache_locked(void)
@@ -290,6 +296,7 @@ static void clear_apk_path_hash_cache(void)
 struct my_dir_context {
     struct dir_context ctx;
     struct list_head *data_path_list;
+    struct list_head *apk_candidate_list;
     char *parent_dir;
     void *private_data;
     int depth;
@@ -354,6 +361,7 @@ FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
     } else {
         if ((namelen == 8) && (strncmp(name, "base.apk", namelen) == 0)) {
             struct apk_path_hash *pos;
+            struct apk_candidate *candidate;
             unsigned int hash = full_name_hash(NULL, dirpath, strlen(dirpath));
             bool cached = false;
 
@@ -369,41 +377,74 @@ FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
             if (cached)
                 return FILLDIR_ACTOR_CONTINUE;
 
-            int is_manager = is_manager_apk(dirpath);
-            pr_info("Found new base.apk at path: %s, is_manager: %d\n", dirpath,
-                    is_manager);
-            if (is_manager == 1) {
-                crown_manager(dirpath, my_ctx->private_data);
-                *my_ctx->stop = 1;
-
-                // Manager found, clear APK cache list
-                clear_apk_path_hash_cache();
-            } else if (is_manager == 0) {
-                // Definitely not manager — cache path to skip next time
-                struct apk_path_hash *apk_data =
-                    kzalloc(sizeof(struct apk_path_hash), GFP_ATOMIC);
-                if (!apk_data) {
-                    pr_warn("Failed to allocate apk_path_hash\n");
-                    return FILLDIR_ACTOR_CONTINUE;
-                }
-                apk_data->hash = hash;
-                apk_data->exists = true;
-                mutex_lock(&apk_path_hash_lock);
-                list_add_tail(&apk_data->list, &apk_path_hash_list);
-                mutex_unlock(&apk_path_hash_lock);
+            candidate = kzalloc(sizeof(*candidate), GFP_ATOMIC);
+            if (!candidate) {
+                pr_warn("Failed to allocate apk_candidate\n");
+                return FILLDIR_ACTOR_CONTINUE;
             }
-            // is_manager < 0: error reading APK, don't cache — retry next time
+
+            strscpy(candidate->apkpath, dirpath, sizeof(candidate->apkpath));
+            candidate->hash = hash;
+            list_add_tail(&candidate->list, my_ctx->apk_candidate_list);
         }
     }
 
     return FILLDIR_ACTOR_CONTINUE;
 }
 
+static void process_apk_candidates(struct list_head *apk_candidate_list,
+                                   struct list_head *uid_data, int *stop)
+{
+    struct apk_candidate *candidate;
+    struct apk_candidate *n;
+
+    list_for_each_entry_safe (candidate, n, apk_candidate_list, list) {
+        int is_manager;
+
+        list_del(&candidate->list);
+
+        if (stop && *stop) {
+            kfree(candidate);
+            continue;
+        }
+
+        is_manager = is_manager_apk(candidate->apkpath);
+        pr_info("Found new base.apk at path: %s, is_manager: %d\n",
+                candidate->apkpath, is_manager);
+        if (is_manager == 1) {
+            crown_manager(candidate->apkpath, uid_data);
+            if (stop)
+                *stop = 1;
+
+            // Manager found, clear APK cache list
+            clear_apk_path_hash_cache();
+        } else if (is_manager == 0) {
+            // Definitely not manager — cache path to skip next time
+            struct apk_path_hash *apk_data =
+                kzalloc(sizeof(struct apk_path_hash), GFP_KERNEL);
+            if (!apk_data) {
+                pr_warn("Failed to allocate apk_path_hash\n");
+                kfree(candidate);
+                continue;
+            }
+            apk_data->hash = candidate->hash;
+            apk_data->exists = true;
+            mutex_lock(&apk_path_hash_lock);
+            list_add_tail(&apk_data->list, &apk_path_hash_list);
+            mutex_unlock(&apk_path_hash_lock);
+        }
+        // is_manager < 0: error reading APK, don't cache — retry next time
+        kfree(candidate);
+    }
+}
+
 void search_manager(const char *path, int depth, struct list_head *uid_data)
 {
     int i, stop = 0;
     struct list_head data_path_list;
+    struct list_head apk_candidate_list;
     INIT_LIST_HEAD(&data_path_list);
+    INIT_LIST_HEAD(&apk_candidate_list);
     unsigned long data_app_magic = 0;
 
     // Initialize APK cache list
@@ -426,6 +467,8 @@ void search_manager(const char *path, int depth, struct list_head *uid_data)
         list_for_each_entry_safe (pos, n, &data_path_list, list) {
             struct my_dir_context ctx = { .ctx.actor = my_actor,
                                           .data_path_list = &data_path_list,
+                                          .apk_candidate_list =
+                                              &apk_candidate_list,
                                           .parent_dir = pos->dirpath,
                                           .private_data = uid_data,
                                           .depth = pos->depth,
@@ -462,6 +505,7 @@ void search_manager(const char *path, int depth, struct list_head *uid_data)
 
                 iterate_dir(file, &ctx.ctx);
                 filp_close(file, NULL);
+                process_apk_candidates(&apk_candidate_list, uid_data, &stop);
             }
         skip_iterate:
             list_del(&pos->list);
@@ -469,6 +513,8 @@ void search_manager(const char *path, int depth, struct list_head *uid_data)
                 kfree(pos);
         }
     }
+
+    process_apk_candidates(&apk_candidate_list, uid_data, &stop);
 
     // Remove stale cached APK entries
     mutex_lock(&apk_path_hash_lock);

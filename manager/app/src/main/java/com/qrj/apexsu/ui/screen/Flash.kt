@@ -3,7 +3,10 @@ package com.qrj.apexsu.ui.screen
 import android.net.Uri
 import android.os.Environment
 import android.os.Parcelable
+import android.os.SystemClock
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -11,10 +14,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.captionBar
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
@@ -30,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -42,6 +48,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -52,12 +61,15 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
 import com.qrj.apexsu.R
 import com.qrj.apexsu.ui.component.KeyEventBlocker
+import com.qrj.apexsu.ui.component.rememberConfirmDialog
 import com.qrj.apexsu.ui.navigation3.LocalNavigator
 import com.qrj.apexsu.ui.theme.LocalEnableBlur
 import com.qrj.apexsu.ui.util.FlashResult
@@ -116,7 +128,6 @@ fun FlashScreen(
 ) {
     val navigator = LocalNavigator.current
     var text by rememberSaveable { mutableStateOf("") }
-    var tempText: String
     val logContent = rememberSaveable { StringBuilder() }
     var showFloatAction by rememberSaveable { mutableStateOf(false) }
 
@@ -124,8 +135,17 @@ fun FlashScreen(
     val enableBlur = LocalEnableBlur.current
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    var confirmed by rememberSaveable { mutableStateOf(false) }
     var flashing by rememberSaveable {
         mutableStateOf(FlashingStatus.FLASHING)
+    }
+    val startedAt = remember { SystemClock.elapsedRealtime() }
+    val elapsed by produceState(initialValue = "00:00", key1 = flashing) {
+        while (flashing == FlashingStatus.FLASHING) {
+            val seconds = ((SystemClock.elapsedRealtime() - startedAt) / 1000).toInt()
+            value = "%02d:%02d".format(seconds / 60, seconds % 60)
+            delay(1000)
+        }
     }
     val hazeState = remember { HazeState() }
     val hazeStyle = if (enableBlur) {
@@ -137,32 +157,66 @@ fun FlashScreen(
         HazeStyle.Unspecified
     }
 
+    val confirmDialog = rememberConfirmDialog(
+        onConfirm = { confirmed = true },
+        onDismiss = { navigator.pop() }
+    )
+    val flashTarget = when (flashIt) {
+        is FlashIt.FlashBoot -> stringResource(if (flashIt.ota) R.string.flash_target_inactive_slot else R.string.flash_target_current_slot)
+        is FlashIt.FlashModules -> stringResource(R.string.module)
+        FlashIt.FlashRestore -> stringResource(R.string.settings_restore_stock_image)
+        FlashIt.FlashUninstall -> stringResource(R.string.settings_uninstall)
+    }
+    val backupStatus = if (flashIt is FlashIt.FlashBoot) {
+        stringResource(R.string.flash_backup_required)
+    } else {
+        stringResource(R.string.flash_backup_not_required)
+    }
     LaunchedEffect(Unit) {
-        if (text.isNotEmpty()) {
+        confirmDialog.showConfirm(
+            title = context.getString(R.string.flash_confirm_title),
+            content = context.getString(
+                R.string.flash_confirm_content,
+                flashTarget,
+                backupStatus,
+                context.getString(R.string.flash_estimated_time_value)
+            )
+        )
+    }
+
+    LaunchedEffect(confirmed) {
+        if (!confirmed || text.isNotEmpty()) {
             return@LaunchedEffect
         }
-        withContext(Dispatchers.IO) {
-            flashIt(flashIt, onStdout = {
-                tempText = "$it\n"
-                if (tempText.startsWith("[H[J")) { // clear command
-                    text = tempText.substring(6)
+        val output = Channel<String>(Channel.UNLIMITED)
+        val collector = launch {
+            for (line in output) {
+                val next = "$line\n"
+                if (next.startsWith("[H[J")) { // clear command
+                    text = next.substring(6)
                 } else {
-                    text += tempText
+                    text += next
                 }
-                logContent.append(it).append("\n")
-            }, onStderr = {
-                logContent.append(it).append("\n")
-            }).apply {
-                if (code != 0) {
-                    text += "Error code: $code.\n $err Please save and check the log.\n"
-                }
-                if (showReboot) {
-                    text += "\n\n\n"
-                    showFloatAction = true
-                }
-                flashing = if (code == 0) FlashingStatus.SUCCESS else FlashingStatus.FAILED
+                logContent.append(line).append("\n")
             }
         }
+        val result = withContext(Dispatchers.IO) {
+            flashIt(flashIt, onStdout = {
+                output.trySend(it)
+            }, onStderr = {
+                output.trySend(it)
+            })
+        }
+        output.close()
+        collector.join()
+        if (result.code != 0) {
+            text += "Error code: ${result.code}.\n ${result.err} Please save and check the log.\n"
+        }
+        if (result.showReboot) {
+            text += "\n\n\n"
+            showFloatAction = true
+        }
+        flashing = if (result.code == 0) FlashingStatus.SUCCESS else FlashingStatus.FAILED
     }
 
     Scaffold(
@@ -179,7 +233,7 @@ fun FlashScreen(
                             "ApexSU_install_log_${date}.log"
                         )
                         file.writeText(logContent.toString())
-                        Toast.makeText(context, "Log saved to ${file.absolutePath}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.log_saved_to, file.absolutePath), Toast.LENGTH_SHORT).show()
                     }
                 },
                 hazeState = hazeState,
@@ -232,7 +286,7 @@ fun FlashScreen(
                 .let { if (enableBlur) it.hazeSource(state = hazeState) else it }
                 .padding(
                     start = innerPadding.calculateStartPadding(layoutDirection),
-                    end = innerPadding.calculateStartPadding(layoutDirection),
+                    end = innerPadding.calculateEndPadding(layoutDirection),
                 )
                 .verticalScroll(scrollState),
         ) {
@@ -242,9 +296,18 @@ fun FlashScreen(
             Spacer(Modifier.height(innerPadding.calculateTopPadding()))
             Text(
                 modifier = Modifier.padding(8.dp),
-                text = text,
+                text = stringResource(R.string.flash_elapsed, elapsed),
+                color = colorScheme.onSurfaceVariantSummary,
                 fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
+            )
+            TerminalLogText(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .fillMaxWidth()
+                    .background(Color(0xFF07111F))
+                    .padding(12.dp),
+                text = text.ifBlank { stringResource(R.string.flash_terminal_label) },
             )
             Spacer(
                 Modifier.height(
@@ -254,6 +317,43 @@ fun FlashScreen(
             )
         }
     }
+}
+
+@Composable
+private fun TerminalLogText(
+    modifier: Modifier = Modifier,
+    text: String
+) {
+    val infoColor = Color(0xFFB7C0CC)
+    val successColor = Color(0xFF63E6A5)
+    val errorColor = Color(0xFFFF6B6B)
+    val annotated = buildAnnotatedString {
+        text.lineSequence().forEach { line ->
+            val color = when {
+                line.contains("error", ignoreCase = true) ||
+                        line.contains("fail", ignoreCase = true) ||
+                        line.contains("abort", ignoreCase = true) -> errorColor
+                line.contains("success", ignoreCase = true) ||
+                        line.contains("done", ignoreCase = true) ||
+                        line.contains("complete", ignoreCase = true) -> successColor
+                else -> infoColor
+            }
+            pushStyle(SpanStyle(color = color))
+            append(line)
+            append('\n')
+            pop()
+        }
+    }
+    BasicText(
+        modifier = modifier,
+        text = annotated,
+        style = TextStyle(
+            color = infoColor,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            lineHeight = 18.sp
+        )
+    )
 }
 
 @Parcelize

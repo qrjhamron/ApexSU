@@ -19,15 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 object DeepLinkResolver {
     fun resolve(intent: Intent?): List<Route> {
         if (intent == null) return emptyList()
-        val shortcutType = intent.getStringExtra("shortcut_type")
-        return when (shortcutType) {
-            "module_action" -> {
-                val moduleId = intent.getStringExtra("module_id") ?: return emptyList()
-                listOf(Route.Main, Route.ExecuteModuleAction(moduleId))
-            }
-
-            else -> emptyList()
-        }
+        return emptyList()
     }
 
     fun resolve(uri: Uri?): List<Route> {

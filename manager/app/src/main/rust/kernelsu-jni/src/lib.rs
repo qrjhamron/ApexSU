@@ -217,9 +217,26 @@ static DRIVER_FD: AtomicI32 = AtomicI32::new(-1);
 static CACHED_VERSION: AtomicI32 = AtomicI32::new(0);
 static CACHED_FLAGS: AtomicI32 = AtomicI32::new(0);
 
-const KSU_DRIVER_FD_NAME: &str = "[ksu_driver]";
+fn probe_driver_fd(fd: i32) -> Option<KsuGetInfoCmd> {
+    if fd < 0 {
+        return None;
+    }
+    let mut cmd = KsuGetInfoCmd::default();
+    let ret = unsafe {
+        libc::ioctl(
+            fd,
+            KSU_IOCTL_GET_INFO as _,
+            std::ptr::from_mut(&mut cmd).cast::<libc::c_void>(),
+        )
+    };
+    if ret == 0 && cmd.version != 0 {
+        Some(cmd)
+    } else {
+        None
+    }
+}
 
-/// Scan `/proc/self/fd` for the KernelSU driver anon-inode link.
+/// Scan `/proc/self/fd` for an fd that answers the KernelSU GET_INFO ioctl.
 fn scan_driver_fd() -> i32 {
     let dir = match std::fs::read_dir("/proc/self/fd") {
         Ok(d) => d,
@@ -239,14 +256,9 @@ fn scan_driver_fd() -> i32 {
             continue;
         }
 
-        let link_path = format!("/proc/self/fd/{}", name_str);
-        let target = match std::fs::read_link(&link_path) {
-            Ok(t) => t,
-            Err(_) => continue,
-        };
-
-        let target_str = target.to_string_lossy();
-        if target_str.contains(KSU_DRIVER_FD_NAME) {
+        if let Some(info) = probe_driver_fd(fd_num) {
+            CACHED_VERSION.store(info.version as i32, Ordering::Relaxed);
+            CACHED_FLAGS.store(info.flags as i32, Ordering::Relaxed);
             return fd_num;
         }
     }
@@ -295,24 +307,6 @@ fn get_info() -> KsuGetInfoCmd {
     cmd
 }
 
-fn legacy_get_info() -> (i32, i32) {
-    let mut version: i32 = -1;
-    let mut flags: i32 = 0;
-    let mut result: i32 = 0;
-    // SAFETY: prctl with custom KernelSU command (0xDEADBEEF) for legacy
-    // detection.  The three mutable pointers are valid stack locals.
-    unsafe {
-        libc::prctl(
-            0xDEADBEEFu32 as libc::c_int,
-            2i64 as libc::c_ulong,
-            &mut version as *mut i32 as libc::c_ulong,
-            &mut flags as *mut i32 as libc::c_ulong,
-            &mut result as *mut i32 as libc::c_ulong,
-        );
-    }
-    (version, flags)
-}
-
 fn get_version() -> u32 {
     get_info().version
 }
@@ -331,7 +325,7 @@ fn is_lkm_mode() -> bool {
     if info.version > 0 {
         return (info.flags & 0x1) != 0;
     }
-    (legacy_get_info().1 & 0x1) != 0
+    false
 }
 
 fn is_manager() -> bool {
@@ -339,7 +333,7 @@ fn is_manager() -> bool {
     if info.version > 0 {
         return (info.flags & 0x2) != 0;
     }
-    legacy_get_info().0 > 0
+    false
 }
 
 fn uid_should_umount(uid: i32) -> bool {
@@ -507,8 +501,7 @@ pub extern "system" fn Java_com_qrj_apexsu_Natives_getVersion(
     if version > 0 {
         return version as jint;
     }
-    // Legacy fallback via prctl
-    legacy_get_info().0
+    version as jint
 }
 
 /// `Natives.getSuperuserCount` — total number of allowed UIDs.

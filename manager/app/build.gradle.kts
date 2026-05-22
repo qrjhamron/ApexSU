@@ -51,7 +51,6 @@ android {
         aidl = true
         buildConfig = true
         compose = true
-        // prefab not needed after switching from C++ CMake to Rust JNI bridge
     }
 
     packaging {
@@ -60,12 +59,11 @@ android {
         }
     }
 
-    // CMake native build disabled — replaced by Rust JNI bridge in jniLibs/
-    // externalNativeBuild {
-    //     cmake {
-    //         path = file("src/main/cpp/CMakeLists.txt")
-    //     }
-    // }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
 
     dependenciesInfo {
         includeInApk = false
@@ -88,6 +86,13 @@ android {
 
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+
+        externalNativeBuild {
+            cmake {
+                cFlags += baseCFlags
+                cppFlags += baseCppFlags
+            }
         }
     }
 
@@ -116,6 +121,7 @@ base {
 
 dependencies {
     implementation(libs.androidx.activity.compose)
+    implementation("androidx.appcompat:appcompat:1.7.1")
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material.icons.extended)

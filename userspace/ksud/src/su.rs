@@ -1,4 +1,7 @@
 //! Su command implementation for granting and managing root access.
+//!
+//! This is the entry point for the 'su' CLI tool. It handles argument
+//! parsing and coordinates with the kernel to elevate privileges.
 
 use crate::{
     defs,
@@ -23,7 +26,9 @@ use rustix::{
     thread::{Gid, Uid, set_thread_res_gid, set_thread_res_uid},
 };
 
+/// Public API for granting root to the current process and spawning a shell.
 pub fn grant_root(global_mnt: bool) -> Result<()> {
+    /* coordinate with LKM to elevate current task's creds */
     crate::ksucalls::grant_root()?;
 
     let mut command = Command::new("sh");
@@ -31,12 +36,13 @@ pub fn grant_root(global_mnt: bool) -> Result<()> {
     let command = unsafe {
         command.pre_exec(move || {
             if global_mnt {
+                /* mount ns 1 is the global namespace on Android */
                 let _ = utils::switch_mnt_ns(1);
             }
             Result::Ok(())
         })
     };
-    // add /data/adb/ksu/bin to PATH
+    /* inject our binary dir into PATH so 'ksud' is always available */
     add_path_to_env(defs::BINARY_DIR)?;
     Err(command.exec().into())
 }
@@ -46,7 +52,9 @@ fn print_usage(program: &str, opts: &Options) {
     print!("{}", opts.usage(&brief));
 }
 
-fn set_identity(uid: u32, gid: u32, groups: &[u32]) {
+/// Swaps current thread IDs. Used when the user requests su to a specific UID.
+fn set_identity(uid: u32, gid: u32, groups: &[u32]) -> std::io::Result<()> {
+    /* supplementary groups must be set before UID/GID drop */
     rustix::thread::set_thread_groups(
         groups
             .iter()
@@ -54,13 +62,19 @@ fn set_identity(uid: u32, gid: u32, groups: &[u32]) {
             .collect::<Vec<_>>()
             .as_ref(),
     )
-    .ok();
+    .map_err(Into::<std::io::Error>::into)?;
+
     let gid = Gid::from_raw(gid);
     let uid = Uid::from_raw(uid);
-    set_thread_res_gid(gid, gid, gid).ok();
-    set_thread_res_uid(uid, uid, uid).ok();
+    
+    /* set real, effective, and saved IDs. failure here is fatal to security boundary. */
+    set_thread_res_gid(gid, gid, gid).map_err(Into::<std::io::Error>::into)?;
+    set_thread_res_uid(uid, uid, uid).map_err(Into::<std::io::Error>::into)?;
+    Ok(())
 }
 
+/// Redirects TTY FDs through the kernel's io_worker wrapper to bypass
+/// strict SELinux TTY access restrictions.
 fn wrap_tty(fd: c_int) {
     let inner_fn = move || -> Result<()> {
         // SAFETY: fd is a valid open file descriptor; isatty is safe to call.
@@ -85,13 +99,14 @@ fn wrap_tty(fd: c_int) {
     }
 }
 
+/// Core su logic. Assumes the kernel has already granted root to the caller.
 #[allow(clippy::similar_names)]
 pub fn root_shell() -> Result<()> {
-    // we are root now, this was set in kernel!
-
     use anyhow::anyhow;
     let env_args: Vec<String> = env::args().collect();
     let program = env_args[0].clone();
+    
+    /* handle '-c' special case where everything following it is a single command string */
     let args = env_args.iter().position(|arg| arg == "-c").map_or_else(
         || env_args.clone(),
         |i| {
@@ -106,52 +121,22 @@ pub fn root_shell() -> Result<()> {
     );
 
     let mut opts = Options::new();
-    opts.optopt(
-        "c",
-        "command",
-        "pass COMMAND to the invoked shell",
-        "COMMAND",
-    );
+    opts.optopt("c", "command", "pass COMMAND to the invoked shell", "COMMAND");
     opts.optflag("h", "help", "display this help message and exit");
     opts.optflag("l", "login", "pretend the shell to be a login shell");
-    opts.optflag(
-        "p",
-        "preserve-environment",
-        "preserve the entire environment",
-    );
-    opts.optopt(
-        "s",
-        "shell",
-        "use SHELL instead of the default /system/bin/sh",
-        "SHELL",
-    );
+    opts.optflag("p", "preserve-environment", "preserve the entire environment");
+    opts.optopt("s", "shell", "use SHELL instead of the default /system/bin/sh", "SHELL");
     opts.optflag("v", "version", "display version number and exit");
     opts.optflag("V", "", "display version code and exit");
-    opts.optflag(
-        "M",
-        "mount-master",
-        "force run in the global mount namespace",
-    );
+    opts.optflag("M", "mount-master", "force run in the global mount namespace");
     opts.optopt("g", "group", "Specify the primary group", "GROUP");
-    opts.optmulti(
-        "G",
-        "supp-group",
-        "Specify a supplementary group. The first specified supplementary group is also used as a primary group if the option -g is not specified.",
-        "GROUP",
-    );
+    opts.optmulti("G", "supp-group", "supplementary group list", "GROUP");
     opts.optflag("W", "no-wrapper", "don't use ksu fd wrapper");
 
-    // Replace -cn with -z, -mm with -M for supporting getopt_long
     let args = args
         .into_iter()
         .map(|e| {
-            if e == "-mm" {
-                "-M".to_string()
-            } else if e == "-cn" {
-                "-z".to_string()
-            } else {
-                e
-            }
+            if e == "-mm" { "-M".to_string() } else if e == "-cn" { "-z".to_string() } else { e }
         })
         .collect::<Vec<String>>();
 
@@ -179,9 +164,7 @@ pub fn root_shell() -> Result<()> {
         return Ok(());
     }
 
-    let shell = matches
-        .opt_str("s")
-        .unwrap_or_else(|| "/system/bin/sh".to_string());
+    let shell = matches.opt_str("s").unwrap_or_else(|| "/system/bin/sh".to_string());
     let mut is_login = matches.opt_present("l");
     let preserve_env = matches.opt_present("p");
     let mount_master = matches.opt_present("M");
@@ -193,18 +176,15 @@ pub fn root_shell() -> Result<()> {
         .map(|g| g.parse::<u32>().map_err(|_| anyhow!("Invalid GID: {g}")))
         .collect::<Result<Vec<_>, _>>()?;
 
-    // if -g provided, use it.
     let mut gid = matches
         .opt_str("g")
         .map(|g| g.parse::<u32>().map_err(|_| anyhow!("Invalid GID: {g}")))
         .transpose()?;
 
-    // otherwise, use the first gid of groups.
     if gid.is_none() && !groups.is_empty() {
         gid = Some(groups[0]);
     }
 
-    // we've make sure that -c is the last option and it already contains the whole command, no need to construct it again
     let args = matches
         .opt_str("c")
         .map(|cmd| vec!["-c".to_string(), cmd])
@@ -216,12 +196,11 @@ pub fn root_shell() -> Result<()> {
         free_idx += 1;
     }
 
-    // use current uid if no user specified, these has been done in kernel!
     let mut uid = getuid().as_raw();
     if free_idx < matches.free.len() {
         let name = &matches.free[free_idx];
-        // SAFETY: CString produces a valid NUL-terminated pointer; getpwnam returns
-        // a valid pointer or null, and .as_ref() handles the null case safely.
+        /* SAFETY: getpwnam(3) is called on a valid C string. We use it to resolve 
+         * human-readable usernames to UIDs. */
         uid = unsafe {
             let pw = CString::new(name.as_str())
                 .ok()
@@ -231,68 +210,56 @@ pub fn root_shell() -> Result<()> {
         }
     }
 
-    // if there is no gid provided, use uid.
     let gid = gid.unwrap_or(uid);
-    // https://github.com/topjohnwu/Magisk/blob/master/native/src/su/su_daemon.cpp#L408
     let arg0 = if is_login { "-" } else { &shell };
 
     let mut command = &mut Command::new(&shell);
 
     if !preserve_env {
-        // This is actually incorrect, i don't know why.
-        // command = command.env_clear();
-
-        // SAFETY: uid is a valid user ID; getpwuid returns a valid pointer or null.
+        /* SAFETY: getpwuid(3) returns a pointer to a thread-local static struct. */
         let pw = unsafe { libc::getpwuid(uid).as_ref() };
 
         if let Some(pw) = pw {
-            // SAFETY: pw is non-null; pw_dir and pw_name are valid C strings per POSIX.
+            // SAFETY: pw fields are guaranteed valid by getpwuid.
             let home = unsafe { CStr::from_ptr(pw.pw_dir) };
             let pw_name = unsafe { CStr::from_ptr(pw.pw_name) };
 
-            let home = home.to_string_lossy();
-            let pw_name = pw_name.to_string_lossy();
-
             command = command
-                .env("HOME", home.as_ref())
-                .env("USER", pw_name.as_ref())
-                .env("LOGNAME", pw_name.as_ref())
+                .env("HOME", home.to_string_lossy().as_ref())
+                .env("USER", pw_name.to_string_lossy().as_ref())
+                .env("LOGNAME", pw_name.to_string_lossy().as_ref())
                 .env("SHELL", &shell);
         }
     }
 
-    // add /data/adb/ksu/bin to PATH
     add_path_to_env(defs::BINARY_DIR)?;
 
-    // when KSURC_PATH exists and ENV is not set, set ENV to KSURC_PATH
     if PathBuf::from(defs::KSURC_PATH).exists() && env::var("ENV").is_err() {
         command = command.env("ENV", defs::KSURC_PATH);
     }
 
-    // escape from the current cgroup and become session leader
-    // WARNING!!! This cause some root shell hang forever!
-    // command = command.process_group(0);
-    // SAFETY: pre_exec runs in a forked child before exec; all operations inside
-    // (umask, switch_cgroups, switch_mnt_ns, set_identity) are safe in this context.
+    // SAFETY: pre_exec runs after fork() but before execve(). 
+    // This is where we drop the kernel-granted root to the target user identity.
     command = unsafe {
         command.pre_exec(move || {
             umask(0o22);
             utils::switch_cgroups();
 
-            // switch to global mount namespace
             if mount_master {
                 let _ = utils::switch_mnt_ns(1);
             }
 
             if use_fd_wrapper {
+                /* Wrap standard FDs to bypass SELinux TTY checks */
                 wrap_tty(0);
                 wrap_tty(1);
                 wrap_tty(2);
             }
 
-            set_identity(uid, gid, &groups);
+            /* Drop to target identity. Failure here must abort to prevent root escape. */
+            set_identity(uid, gid, &groups)?;
 
-            Result::Ok(())
+            std::io::Result::Ok(())
         })
     };
 
@@ -306,7 +273,7 @@ fn add_path_to_env(path: &str) -> Result<()> {
     let new_path = PathBuf::from(path.trim_end_matches('/'));
     paths.push(new_path);
     let new_path_env = env::join_paths(paths)?;
-    // SAFETY: called during single-threaded initialization before spawning threads.
+    // SAFETY: set_var is called in a single-threaded daemon initialization context.
     unsafe { env::set_var("PATH", new_path_env) };
     Ok(())
 }

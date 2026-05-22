@@ -65,3 +65,5 @@ val LocalEnableBlur = staticCompositionLocalOf { true }
 val LocalEnableFloatingBottomBar = staticCompositionLocalOf { false }
 
 val LocalEnableFloatingBottomBarBlur = staticCompositionLocalOf { true }
+
+val LocalReduceMotion = staticCompositionLocalOf { false }

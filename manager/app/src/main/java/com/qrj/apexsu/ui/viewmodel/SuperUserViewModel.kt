@@ -114,14 +114,16 @@ class SuperUserViewModel : ViewModel() {
             return
         }
 
+        _searchStatus.value.resultStatus = SearchStatus.ResultStatus.LOAD
+        val currentApps = _appList.value
+        val query = _searchStatus.value.searchText
         val result = withContext(Dispatchers.IO) {
-            _searchStatus.value.resultStatus = SearchStatus.ResultStatus.LOAD
-            _appList.value.filter {
-                it.label.contains(_searchStatus.value.searchText, true) || it.packageName.contains(
-                    _searchStatus.value.searchText,
+            currentApps.filter {
+                it.label.contains(query, true) || it.packageName.contains(
+                    query,
                     true
                 ) || HanziToPinyin.getInstance().toPinyinString(it.label)
-                    .contains(_searchStatus.value.searchText, true)
+                    .contains(query, true)
             }
         }
 

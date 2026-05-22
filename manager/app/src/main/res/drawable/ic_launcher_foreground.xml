@@ -4,18 +4,16 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Apex triangle outline -->
     <path
-        android:pathData="M54,24 L24,84 L84,84 Z"
-        android:strokeWidth="3"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineJoin="miter"
-        android:fillColor="@android:color/transparent" />
-
-    <!-- Crossbar forming "A" letterform -->
+        android:fillColor="#FF07111F"
+        android:pathData="M54,15L88,78L74,78L54,41L34,78L20,78L54,15Z" />
     <path
-        android:pathData="M34,64 L74,64"
-        android:strokeWidth="3"
-        android:strokeColor="#FFFFFF" />
+        android:fillColor="#FF0B2338"
+        android:pathData="M54,31L77,78L64,78L54,56L44,78L31,78L54,31Z" />
+    <path
+        android:fillColor="#FF00D7FF"
+        android:pathData="M54,24L60,34L43,78L35,78L54,24Z" />
+    <path
+        android:fillColor="#FF52F2FF"
+        android:pathData="M61,50L77,78L68,78L57,58L61,50Z" />
 </vector>

@@ -386,20 +386,55 @@ private fun ShortcutIntentHandler(
     val context = LocalContext.current
     val intentStateValue by intentState.collectAsState()
     val navigator = LocalNavigator.current
+    var pendingShortcutType by remember { mutableStateOf<String?>(null) }
+    var pendingModuleId by remember { mutableStateOf<String?>(null) }
+    val shortcutDialog = rememberConfirmDialog(
+        onConfirm = {
+            val moduleId = pendingModuleId
+            when (pendingShortcutType) {
+                "module_action" -> if (!moduleId.isNullOrBlank()) {
+                    navigator.push(Route.ExecuteModuleAction(moduleId))
+                }
+
+                "module_webui" -> if (!moduleId.isNullOrBlank()) {
+                    val webIntent = Intent(context, WebUIActivity::class.java)
+                        .setData("kernelsu://webui/$moduleId".toUri())
+                    context.startActivity(webIntent)
+                }
+            }
+            pendingShortcutType = null
+            pendingModuleId = null
+        },
+        onDismiss = {
+            pendingShortcutType = null
+            pendingModuleId = null
+        }
+    )
     LaunchedEffect(intentStateValue) {
         val intent = activity.intent
         val type = intent?.getStringExtra("shortcut_type") ?: return@LaunchedEffect
+        if (!Natives.isManager || Natives.requireNewKernel()) {
+            return@LaunchedEffect
+        }
         when (type) {
             "module_action" -> {
                 val moduleId = intent.getStringExtra("module_id") ?: return@LaunchedEffect
-                navigator.push(Route.ExecuteModuleAction(moduleId))
+                pendingShortcutType = type
+                pendingModuleId = moduleId
+                shortcutDialog.showConfirm(
+                    title = context.getString(R.string.action),
+                    content = moduleId
+                )
             }
 
             "module_webui" -> {
                 val moduleId = intent.getStringExtra("module_id") ?: return@LaunchedEffect
-                val webIntent = Intent(context, WebUIActivity::class.java)
-                    .setData("kernelsu://webui/$moduleId".toUri())
-                context.startActivity(webIntent)
+                pendingShortcutType = type
+                pendingModuleId = moduleId
+                shortcutDialog.showConfirm(
+                    title = context.getString(R.string.open),
+                    content = moduleId
+                )
             }
 
             else -> return@LaunchedEffect

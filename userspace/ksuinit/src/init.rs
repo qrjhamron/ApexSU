@@ -12,6 +12,8 @@ use rustix::{
     },
 };
 
+/// RAII helper to ensure kernel-interface filesystems are unmounted
+/// before handoff to the real init.
 struct AutoUmount {
     mountpoints: Vec<String>,
 }
@@ -19,6 +21,8 @@ struct AutoUmount {
 impl Drop for AutoUmount {
     fn drop(&mut self) {
         for mountpoint in self.mountpoints.iter().rev() {
+            /* Use DETACH (lazy umount) to ensure the mount point is 
+             * cleared even if some kernel thread is still accessing it. */
             if let Err(e) = unmount(mountpoint.as_str(), UnmountFlags::DETACH) {
                 log::error!("Cannot umount {}: {}", mountpoint, e)
             }
@@ -26,11 +30,14 @@ impl Drop for AutoUmount {
     }
 }
 
+/// Helper for mounting essential pseudo-filesystems.
 fn mount_filesystem(name: &str, mountpoint: &str) -> Result<()> {
     mkdir(mountpoint, Mode::from_raw_mode(0o755)).or_else(|err| match err.kind() {
         ErrorKind::AlreadyExists => Ok(()),
         _ => Err(err),
     })?;
+    /* Use the new mount API (fsopen/fsmount) for better error reporting 
+     * on modern kernels. */
     let fs_fd = fsopen(name, FsOpenFlags::FSOPEN_CLOEXEC)?;
     fsconfig_create(fs_fd.as_fd())?;
     let mount_fd = fsmount(
@@ -51,13 +58,13 @@ fn mount_filesystem(name: &str, mountpoint: &str) -> Result<()> {
 fn prepare_mount() -> AutoUmount {
     let mut mountpoints = vec![];
 
-    // mount procfs
+    /* procfs is needed for /proc/self/exe and kernel info */
     match mount_filesystem("proc", "/proc") {
         Ok(_) => mountpoints.push("/proc".to_string()),
         Err(e) => log::error!("Cannot mount procfs: {:?}", e),
     }
 
-    // mount sysfs
+    /* sysfs is needed for LKM symbol resolution */
     match mount_filesystem("sysfs", "/sys") {
         Ok(_) => mountpoints.push("/sys".to_string()),
         Err(e) => log::error!("Cannot mount sysfs: {:?}", e),
@@ -66,12 +73,14 @@ fn prepare_mount() -> AutoUmount {
     AutoUmount { mountpoints }
 }
 
+/// Initializes kernel logging. If /dev/kmsg is missing, attempts to 
+/// create it as a character device node.
 fn setup_kmsg() {
     const KMSG: &str = "/dev/kmsg";
     let device = match access(KMSG, Access::EXISTS) {
         Ok(_) => KMSG,
         Err(_) => {
-            // try to create it
+            /* 1, 11 are the standard major/minor numbers for /dev/kmsg */
             mknodat(
                 CWD,
                 "/kmsg",
@@ -88,7 +97,7 @@ fn setup_kmsg() {
 }
 
 fn unlimit_kmsg() {
-    // Disable kmsg rate limiting
+    /* Disable kmsg rate limiting to ensure we see all early-boot logs. */
     if let Ok(mut rate) = std::fs::File::options()
         .write(true)
         .open("/proc/sys/kernel/printk_devkmsg")
@@ -97,16 +106,14 @@ fn unlimit_kmsg() {
     }
 }
 
+/// Core initialization routine for the ksuinit loader.
 pub fn init() -> Result<()> {
-    // Setup kernel log first
     setup_kmsg();
 
     log::info!("Hello, KernelSU!");
 
-    // mount /proc and /sys to access kernel interface
     let _dontdrop = prepare_mount();
 
-    // This relies on the fact that we have /proc mounted
     unlimit_kmsg();
 
     if has_kernelsu() {
@@ -118,7 +125,8 @@ pub fn init() -> Result<()> {
         }
     }
 
-    // And now we should prepare the real init to transfer control to it
+    /* Prepare for init handoff. We must unlink the symlink we created
+     * in the previous boot session or the raw loader binary. */
     unlink("/init")?;
 
     let real_init = match access("/init.real", Access::EXISTS) {
@@ -140,10 +148,12 @@ fn select_init_target(init_real_exists: bool) -> &'static str {
     }
 }
 
+/// Legacy check for older KernelSU versions using prctl.
 fn has_kernelsu_legacy() -> bool {
     use syscalls::{Sysno, syscall};
     let mut version = 0;
     const CMD_GET_VERSION: i32 = 2;
+    /* SAFETY: syscall 0xDEADBEEF is the custom KSU prctl bridge. */
     unsafe {
         let _ = syscall!(
             Sysno::prctl,
@@ -153,7 +163,7 @@ fn has_kernelsu_legacy() -> bool {
         );
     }
 
-    log::info!("KernelSU version: {}", version);
+    log::info!("KernelSU version (legacy): {}", version);
 
     version != 0
 }
@@ -166,14 +176,15 @@ struct GetInfoCmd {
     features: u32,
 }
 
+/// Detects modern KernelSU via the reboot-bridge covert channel.
 fn has_kernelsu_v2() -> bool {
     use syscalls::{Sysno, syscall};
     const KSU_INSTALL_MAGIC1: u32 = 0xDEADBEEF;
     const KSU_INSTALL_MAGIC2: u32 = 0xCAFEBABE;
     const KSU_IOCTL_GET_INFO: u32 = 0x80004b02; // _IOC(_IOC_READ, 'K', 2, 0)
 
-    // Try new method: get driver fd using reboot syscall with magic numbers
     let mut fd: i32 = -1;
+    /* SAFETY: reboot syscall with magic numbers is our stealth IOCTL channel. */
     unsafe {
         let _ = syscall!(
             Sysno::reboot,
@@ -185,9 +196,9 @@ fn has_kernelsu_v2() -> bool {
     }
 
     let version = if fd >= 0 {
-        // New method: try to get version info via ioctl
         let mut cmd = GetInfoCmd::default();
         let version = unsafe {
+            /* SAFETY: fd is a valid driver handle returned by the reboot bridge. */
             let ret = syscall!(Sysno::ioctl, fd, KSU_IOCTL_GET_INFO, &mut cmd as *mut _);
 
             match ret {
@@ -210,6 +221,7 @@ fn has_kernelsu_v2() -> bool {
     version != 0
 }
 
+/// Check if any version of KernelSU is currently active in the kernel.
 pub fn has_kernelsu() -> bool {
     has_kernelsu_v2() || has_kernelsu_legacy()
 }

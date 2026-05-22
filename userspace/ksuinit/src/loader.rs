@@ -5,6 +5,8 @@ use scroll::{Pwrite, ctx::SizeWith};
 use std::collections::HashMap;
 use std::fs;
 
+/// RAII helper to temporarily relax kernel pointer restrictions.
+/// Needed to read kallsyms addresses.
 struct Kptr {
     value: String,
 }
@@ -12,6 +14,7 @@ struct Kptr {
 impl Kptr {
     pub fn new() -> Result<Self> {
         let value = fs::read_to_string("/proc/sys/kernel/kptr_restrict")?;
+        /* 1: pointers are restricted unless user has CAP_SYSLOG */
         fs::write("/proc/sys/kernel/kptr_restrict", "1")?;
         Ok(Kptr { value })
     }
@@ -19,10 +22,12 @@ impl Kptr {
 
 impl Drop for Kptr {
     fn drop(&mut self) {
+        /* restore original restriction level */
         let _ = fs::write("/proc/sys/kernel/kptr_restrict", self.value.as_bytes());
     }
 }
 
+/// Scans /proc/kallsyms and builds a map of symbol names to addresses.
 fn parse_kallsyms() -> Result<HashMap<String, u64>> {
     let _dontdrop = Kptr::new()?;
 
@@ -36,6 +41,7 @@ fn parse_kallsyms() -> Result<HashMap<String, u64>> {
                 .and_then(|addr| splits.nth(1).map(|symbol| (symbol, addr)))
         })
         .map(|(symbol, addr)| {
+            /* normalize symbol names by stripping LLVM suffixes */
             (
                 symbol
                     .find("$")
@@ -50,8 +56,10 @@ fn parse_kallsyms() -> Result<HashMap<String, u64>> {
     Ok(allsyms)
 }
 
+/// Manually loads a kernel module, performing userspace symbol resolution.
+/// Needed because early init LKM loading lacks the standard kernel symbol
+/// resolution support found in kmod/modprobe.
 pub fn load_module(path: &str) -> Result<()> {
-    // check if self is init process(pid == 1)
     if !rustix::process::getpid().is_init() {
         anyhow::bail!("{}", "Invalid process");
     }
@@ -67,6 +75,7 @@ pub fn load_module(path: &str) -> Result<()> {
             continue;
         }
 
+        /* only interested in undefined symbols that the module needs from the kernel */
         if sym.st_shndx != section_header::SHN_UNDEF as usize {
             continue;
         }
@@ -77,9 +86,11 @@ pub fn load_module(path: &str) -> Result<()> {
 
         let offset = elf.syms.offset() + index * Sym::size_with(elf.syms.ctx());
         let Some(real_addr) = kernel_symbols.get(name) else {
+            /* fail-soft on missing symbols; the kernel might still reject it later */
             log::warn!("Cannot find symbol: {}", &name);
             continue;
         };
+        /* patch the ELF in memory to convert UNDEF to ABS with the real kernel address */
         sym.st_shndx = section_header::SHN_ABS as usize;
         sym.st_value = *real_addr;
         modifications.push((sym, offset));
@@ -89,6 +100,7 @@ pub fn load_module(path: &str) -> Result<()> {
     for ele in modifications {
         buffer.pwrite_with(ele.0, ele.1, ctx)?;
     }
+    /* init_module(2) performs the final load. cstr!("") represents empty module params. */
     init_module(&buffer, cstr!("")).context("init_module failed.")?;
     Ok(())
 }

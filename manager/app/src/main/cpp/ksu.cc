@@ -15,12 +15,31 @@
 #include <unistd.h>
 #include <climits>
 #include <sys/syscall.h>
+#include <cerrno>
 #include "ksu.h"
 
 static int fd = -1;
+static struct ksu_get_info_cmd g_version {};
+
+static bool probe_driver_fd(int candidate, struct ksu_get_info_cmd *out) {
+    if (candidate < 0) {
+        return false;
+    }
+
+    struct ksu_get_info_cmd info = {};
+    if (ioctl(candidate, KSU_IOCTL_GET_INFO, &info) != 0) {
+        return false;
+    }
+    if (info.version == 0) {
+        return false;
+    }
+    if (out) {
+        *out = info;
+    }
+    return true;
+}
 
 static inline int scan_driver_fd() {
-    const char *kName = "[ksu_driver]";
     DIR *dir = opendir("/proc/self/fd");
     if (!dir) {
         return -1;
@@ -28,8 +47,7 @@ static inline int scan_driver_fd() {
 
     int found = -1;
     struct dirent *de;
-    char path[64];
-    char target[PATH_MAX];
+    struct ksu_get_info_cmd info = {};
 
     while ((de = readdir(dir)) != NULL) {
         if (de->d_name[0] == '.') {
@@ -42,20 +60,13 @@ static inline int scan_driver_fd() {
             continue;
         }
 
-        snprintf(path, sizeof(path), "/proc/self/fd/%s", de->d_name);
-        ssize_t n = readlink(path, target, sizeof(target) - 1);
-        if (n < 0) {
+        if (!probe_driver_fd((int)fd_long, &info)) {
             continue;
         }
-        target[n] = '\0';
 
-        const char *base = strrchr(target, '/');
-        base = base ? base + 1 : target;
-
-        if (strstr(base, kName)) {
-            found = (int)fd_long;
-            break;
-        }
+        found = (int)fd_long;
+        g_version = info;
+        break;
     }
 
     closedir(dir);
@@ -71,10 +82,13 @@ static int ksuctl(unsigned long op, Args &&... args) {
 
     static_assert(sizeof...(Args) <= 1, "ioctl expects at most one extra argument");
 
+    if (fd < 0) {
+        errno = EBADF;
+        return -1;
+    }
+
     return ioctl(fd, op, std::forward<Args>(args)...);
 }
-
-static struct ksu_get_info_cmd g_version {};
 
 struct ksu_get_info_cmd get_info() {
     if (!g_version.version) {
@@ -103,7 +117,7 @@ bool is_lkm_mode() {
     if (info.version > 0) {
         return (info.flags & 0x1) != 0;
     }
-    return (legacy_get_info().second & 0x1) != 0;
+    return false;
 }
 
 bool is_manager() {
@@ -111,7 +125,7 @@ bool is_manager() {
     if (info.version > 0) {
         return (info.flags & 0x2) != 0;
     }
-    return legacy_get_info().first > 0;
+    return false;
 }
 
 bool uid_should_umount(int uid) {

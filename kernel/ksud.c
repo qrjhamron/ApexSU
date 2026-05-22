@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+#include <linux/binfmts.h>
 #include <linux/rcupdate.h>
 #include <linux/slab.h>
 #include <linux/task_work.h>
@@ -124,7 +125,6 @@ void on_boot_completed(void)
     track_throne(true);
 }
 
-#define MAX_ARG_STRINGS 0x7FFFFFFF
 struct user_arg_ptr {
 #ifdef CONFIG_COMPAT
     bool is_compat;
@@ -169,27 +169,25 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
 
 static int __maybe_unused count(struct user_arg_ptr argv, int max)
 {
-    int i = 0;
+    int i;
 
     if (argv.ptr.native != NULL) {
-        for (;;) {
+        for (i = 0; i < max; i++) {
             const char __user *p = get_user_arg_ptr(argv, i);
 
             if (!p)
-                break;
+                return i;
 
             if (IS_ERR(p))
                 return -EFAULT;
 
-            if (i >= max)
-                return -E2BIG;
-            ++i;
-
             if (fatal_signal_pending(current))
                 return -ERESTARTNOHAND;
         }
+
+        return -E2BIG;
     }
-    return i;
+    return 0;
 }
 
 static void on_post_fs_data_cbfun(struct callback_head *cb)

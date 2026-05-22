@@ -18,6 +18,13 @@
 
 struct cred *ksu_cred;
 static atomic_t ksu_module_shutting_down = ATOMIC_INIT(0);
+#ifdef MODULE
+static struct list_head *ksu_module_prev;
+#endif
+
+extern void ksu_observer_exit(void);
+extern int ksu_pkg_observer_workqueue_init(void);
+extern void ksu_pkg_observer_workqueue_exit(void);
 
 bool ksu_module_is_shutting_down(void)
 {
@@ -67,6 +74,8 @@ int __init kernelsu_init(void)
     ksu_cred = prepare_creds();
     if (!ksu_cred) {
         pr_err("prepare cred failed!\n");
+        ret = -ENOMEM;
+        goto err_prepare_creds;
     }
 
     ksu_feature_init();
@@ -77,33 +86,51 @@ int __init kernelsu_init(void)
 
     ksu_allowlist_init();
 
+    ret = ksu_pkg_observer_workqueue_init();
+    if (ret) {
+        pr_err("pkg observer workqueue init failed: %d\n", ret);
+        goto err_pkg_observer_workqueue;
+    }
+
     ksu_throne_tracker_init();
 
     ret = ksu_ksud_init();
     if (ret) {
         pr_err("ksud init failed: %d\n", ret);
-        atomic_set(&ksu_module_shutting_down, 1);
-        ksu_throne_tracker_exit();
-        ksu_syscall_hook_manager_exit();
-        ksu_allowlist_exit();
-        ksu_supercalls_exit();
-        ksu_feature_exit();
-        if (ksu_cred)
-            put_cred(ksu_cred);
-        return ret;
+        goto err_ksud;
     }
 
     ksu_file_wrapper_init();
 
 #ifdef MODULE
 #ifndef CONFIG_KSU_DEBUG
+    ksu_module_prev = THIS_MODULE->list.prev;
     kobject_del(&THIS_MODULE->mkobj.kobj);
+    mutex_lock(&module_mutex);
+    list_del_rcu(&THIS_MODULE->list);
+    mutex_unlock(&module_mutex);
+    synchronize_rcu();
 #endif
 #endif
     return 0;
+
+err_ksud:
+    atomic_set(&ksu_module_shutting_down, 1);
+    ksu_throne_tracker_exit();
+    ksu_pkg_observer_workqueue_exit();
+    goto err_allowlist;
+err_pkg_observer_workqueue:
+    atomic_set(&ksu_module_shutting_down, 1);
+err_allowlist:
+    ksu_allowlist_exit();
+    ksu_syscall_hook_manager_exit();
+    ksu_supercalls_exit();
+    ksu_feature_exit();
+    put_cred(ksu_cred);
+err_prepare_creds:
+    return ret;
 }
 
-extern void ksu_observer_exit(void);
 void kernelsu_exit(void)
 {
     atomic_set(&ksu_module_shutting_down, 1);
@@ -111,6 +138,8 @@ void kernelsu_exit(void)
     ksu_ksud_exit();
 
     ksu_observer_exit();
+
+    ksu_pkg_observer_workqueue_exit();
 
     ksu_throne_tracker_exit();
 
@@ -125,6 +154,14 @@ void kernelsu_exit(void)
     if (ksu_cred) {
         put_cred(ksu_cred);
     }
+
+#ifdef MODULE
+#ifndef CONFIG_KSU_DEBUG
+    mutex_lock(&module_mutex);
+    list_add_rcu(&THIS_MODULE->list, ksu_module_prev);
+    mutex_unlock(&module_mutex);
+#endif
+#endif
 }
 
 module_init(kernelsu_init);
@@ -137,4 +174,6 @@ MODULE_DESCRIPTION("Kernel Module");
 MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
 #else
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+#endif
+_NOT_a_driver);
 #endif

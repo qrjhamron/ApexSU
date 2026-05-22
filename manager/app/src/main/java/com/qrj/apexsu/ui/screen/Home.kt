@@ -12,6 +12,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,6 +76,7 @@ import com.qrj.apexsu.ui.component.rememberConfirmDialog
 import com.qrj.apexsu.ui.navigation3.Navigator
 import com.qrj.apexsu.ui.navigation3.Route
 import com.qrj.apexsu.ui.theme.LocalEnableBlur
+import com.qrj.apexsu.ui.theme.LocalReduceMotion
 import com.qrj.apexsu.ui.theme.isInDarkTheme
 import com.qrj.apexsu.ui.util.checkNewVersion
 import com.qrj.apexsu.ui.util.getModuleCount
@@ -294,11 +298,18 @@ private fun StatusCard(
     onClickSuperuser: () -> Unit = {},
     onclickModule: () -> Unit = {},
 ) {
+    val reduceMotion = LocalReduceMotion.current
     Column(
         modifier = Modifier
     ) {
         when {
             ksuVersion != null -> {
+                val superuserCount by produceState(initialValue = 0) {
+                    value = withContext(Dispatchers.IO) { getSuperuserCount() }
+                }
+                val moduleCount by produceState(initialValue = 0) {
+                    value = withContext(Dispatchers.IO) { getModuleCount() }
+                }
                 val safeMode = when {
                     Natives.isSafeMode -> " [${stringResource(id = R.string.safe_mode)}]"
                     else -> ""
@@ -312,13 +323,20 @@ private fun StatusCard(
 
                 val workingText = "${stringResource(id = R.string.home_working)}$workingMode$safeMode"
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                AnimatedVisibility(
+                    visible = true,
+                    enter = if (reduceMotion) fadeIn(tween(0)) else fadeIn(tween(220)) + slideInVertically(
+                        animationSpec = tween(220),
+                        initialOffsetY = { it / 4 }
+                    )
                 ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                     Card(
                         modifier = Modifier
                             .weight(1f)
@@ -373,6 +391,7 @@ private fun StatusCard(
                                     text = stringResource(R.string.home_working_version, ksuVersion),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
+                                    fontFamily = FontFamily.Monospace,
                                 )
                             }
                         }
@@ -404,7 +423,7 @@ private fun StatusCard(
                                 )
                                 Text(
                                     modifier = Modifier.fillMaxWidth(),
-                                    text = getSuperuserCount().toString(),
+                                    text = superuserCount.toString(),
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colorScheme.onSurface,
@@ -434,7 +453,7 @@ private fun StatusCard(
                                 )
                                 Text(
                                     modifier = Modifier.fillMaxWidth(),
-                                    text = getModuleCount().toString(),
+                                    text = moduleCount.toString(),
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colorScheme.onSurface,
@@ -443,9 +462,12 @@ private fun StatusCard(
                         }
                     }
                 }
+                }
             }
 
             kernelVersion.isGKI() -> {
+                val uriHandler = LocalUriHandler.current
+                val guideUrl = stringResource(R.string.home_learn_kernelsu_url)
                 Card(
                     onClick = {
                         onClickInstall()
@@ -454,16 +476,26 @@ private fun StatusCard(
                     pressFeedbackType = PressFeedbackType.Sink
                 ) {
                     BasicComponent(
-                        title = stringResource(R.string.home_not_installed),
-                        summary = stringResource(R.string.home_click_to_install),
+                        title = stringResource(R.string.home_kernel_not_detected_title),
+                        summary = stringResource(R.string.home_kernel_not_detected_body),
                         startAction = {
                             Icon(
                                 Icons.Rounded.ErrorOutline,
-                                stringResource(R.string.home_not_installed),
+                                stringResource(R.string.home_kernel_not_detected_title),
                                 modifier = Modifier
                                     .padding(end = 16.dp),
                                 tint = colorScheme.onBackground,
                             )
+                        },
+                        endActions = {
+                            Text(
+                                text = stringResource(R.string.learn_more),
+                                color = colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        },
+                        onClick = {
+                            uriHandler.openUri(guideUrl)
                         }
                     )
                 }

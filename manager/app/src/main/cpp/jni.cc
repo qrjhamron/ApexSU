@@ -19,12 +19,7 @@
 extern "C"
 JNIEXPORT jint JNICALL
 Java_com_qrj_apexsu_Natives_getVersion(JNIEnv *env, jobject) {
-    int version = get_version();
-    if (version > 0) {
-        return version;
-    }
-    // try legacy method as fallback
-    return legacy_get_info().first;
+    return get_version();
 }
 
 extern "C"
@@ -56,6 +51,9 @@ Java_com_qrj_apexsu_Natives_isManager(JNIEnv *env, jclass clazz) {
 }
 
 static void fillIntArray(JNIEnv *env, jobject list, int *data, int count) {
+    if (!list || !data || count <= 0) {
+        return;
+    }
     auto cls = env->GetObjectClass(list);
     auto add = env->GetMethodID(cls, "add", "(Ljava/lang/Object;)Z");
     auto integerCls = env->FindClass("java/lang/Integer");
@@ -63,19 +61,31 @@ static void fillIntArray(JNIEnv *env, jobject list, int *data, int count) {
     for (int i = 0; i < count; ++i) {
         auto integer = env->NewObject(integerCls, constructor, data[i]);
         env->CallBooleanMethod(list, add, integer);
+        env->DeleteLocalRef(integer);
     }
+    env->DeleteLocalRef(integerCls);
+    env->DeleteLocalRef(cls);
 }
 
 static void addIntToList(JNIEnv *env, jobject list, int ele) {
+    if (!list) {
+        return;
+    }
     auto cls = env->GetObjectClass(list);
     auto add = env->GetMethodID(cls, "add", "(Ljava/lang/Object;)Z");
     auto integerCls = env->FindClass("java/lang/Integer");
     auto constructor = env->GetMethodID(integerCls, "<init>", "(I)V");
     auto integer = env->NewObject(integerCls, constructor, ele);
     env->CallBooleanMethod(list, add, integer);
+    env->DeleteLocalRef(integer);
+    env->DeleteLocalRef(integerCls);
+    env->DeleteLocalRef(cls);
 }
 
 static uint64_t capListToBits(JNIEnv *env, jobject list) {
+    if (!list) {
+        return 0;
+    }
     auto cls = env->GetObjectClass(list);
     auto get = env->GetMethodID(cls, "get", "(I)Ljava/lang/Object;");
     auto size = env->GetMethodID(cls, "size", "()I");
@@ -85,44 +95,83 @@ static uint64_t capListToBits(JNIEnv *env, jobject list) {
     uint64_t result = 0;
     for (int i = 0; i < listSize; ++i) {
         auto integer = env->CallObjectMethod(list, get, i);
+        if (!integer) {
+            continue;
+        }
         int data = env->CallIntMethod(integer, intValue);
+        env->DeleteLocalRef(integer);
 
         if (cap_valid(data)) {
             result |= (1ULL << data);
         }
     }
 
+    env->DeleteLocalRef(integerCls);
+    env->DeleteLocalRef(cls);
     return result;
 }
 
 static int getListSize(JNIEnv *env, jobject list) {
+    if (!list) {
+        return 0;
+    }
     auto cls = env->GetObjectClass(list);
     auto size = env->GetMethodID(cls, "size", "()I");
-    return env->CallIntMethod(list, size);
+    int result = env->CallIntMethod(list, size);
+    env->DeleteLocalRef(cls);
+    return result;
 }
 
 static void fillArrayWithList(JNIEnv *env, jobject list, int *data, int count) {
+    if (!list || !data || count <= 0) {
+        return;
+    }
     auto cls = env->GetObjectClass(list);
     auto get = env->GetMethodID(cls, "get", "(I)Ljava/lang/Object;");
     auto integerCls = env->FindClass("java/lang/Integer");
     auto intValue = env->GetMethodID(integerCls, "intValue", "()I");
     for (int i = 0; i < count; ++i) {
         auto integer = env->CallObjectMethod(list, get, i);
+        if (!integer) {
+            continue;
+        }
         data[i] = env->CallIntMethod(integer, intValue);
+        env->DeleteLocalRef(integer);
     }
+    env->DeleteLocalRef(integerCls);
+    env->DeleteLocalRef(cls);
+}
+
+template <size_t N>
+static bool copyJStringToFixed(JNIEnv *env, jstring src, char (&dst)[N]) {
+    if (!src) {
+        return false;
+    }
+    auto len = env->GetStringUTFLength(src);
+    if (len < 0 || static_cast<size_t>(len) >= N) {
+        return false;
+    }
+    auto chars = env->GetStringUTFChars(src, nullptr);
+    if (!chars) {
+        return false;
+    }
+    strncpy(dst, chars, N - 1);
+    dst[N - 1] = '\0';
+    env->ReleaseStringUTFChars(src, chars);
+    return true;
 }
 
 extern "C"
 JNIEXPORT jobject JNICALL
 Java_com_qrj_apexsu_Natives_getAppProfile(JNIEnv *env, jobject, jstring pkg, jint uid) {
-    if (env->GetStringLength(pkg) > KSU_MAX_PACKAGE_NAME) {
+    if (!pkg) {
         return nullptr;
     }
 
     p_key_t key = {};
-    auto cpkg = env->GetStringUTFChars(pkg, nullptr);
-    strcpy(key, cpkg);
-    env->ReleaseStringUTFChars(pkg, cpkg);
+    if (!copyJStringToFixed(env, pkg, key)) {
+        return nullptr;
+    }
 
     app_profile profile = {};
     profile.version = KSU_APP_PROFILE_VER;
@@ -152,7 +201,9 @@ Java_com_qrj_apexsu_Natives_getAppProfile(JNIEnv *env, jobject, jstring pkg, jin
     auto nonRootUseDefaultField = env->GetFieldID(cls, "nonRootUseDefault", "Z");
     auto umountModulesField = env->GetFieldID(cls, "umountModules", "Z");
 
-    env->SetObjectField(obj, keyField, env->NewStringUTF(profile.key));
+    auto profileKey = env->NewStringUTF(profile.key);
+    env->SetObjectField(obj, keyField, profileKey);
+    env->DeleteLocalRef(profileKey);
     env->SetIntField(obj, currentUidField, profile.current_uid);
 
     if (useDefaultProfile) {
@@ -165,6 +216,7 @@ Java_com_qrj_apexsu_Natives_getAppProfile(JNIEnv *env, jobject, jstring pkg, jin
         env->SetBooleanField(obj, allowSuField, false);
         env->SetBooleanField(obj, nonRootUseDefaultField, true);
 
+        env->DeleteLocalRef(cls);
         return obj;
     }
 
@@ -173,8 +225,9 @@ Java_com_qrj_apexsu_Natives_getAppProfile(JNIEnv *env, jobject, jstring pkg, jin
     if (allowSu) {
         env->SetBooleanField(obj, rootUseDefaultField, (jboolean) profile.rp_config.use_default);
         if (strlen(profile.rp_config.template_name) > 0) {
-            env->SetObjectField(obj, rootTemplateField,
-                    env->NewStringUTF(profile.rp_config.template_name));
+            auto templateName = env->NewStringUTF(profile.rp_config.template_name);
+            env->SetObjectField(obj, rootTemplateField, templateName);
+            env->DeleteLocalRef(templateName);
         }
 
         env->SetIntField(obj, uidField, profile.rp_config.profile.uid);
@@ -187,6 +240,7 @@ Java_com_qrj_apexsu_Natives_getAppProfile(JNIEnv *env, jobject, jstring pkg, jin
             groupCount = KSU_MAX_GROUPS;
         }
         fillIntArray(env, groupList, profile.rp_config.profile.groups, groupCount);
+        env->DeleteLocalRef(groupList);
 
         jobject capList = env->GetObjectField(obj, capabilitiesField);
         for (int i = 0; i <= CAP_LAST_CAP; i++) {
@@ -194,9 +248,11 @@ Java_com_qrj_apexsu_Natives_getAppProfile(JNIEnv *env, jobject, jstring pkg, jin
                 addIntToList(env, capList, i);
             }
         }
+        env->DeleteLocalRef(capList);
 
-        env->SetObjectField(obj, domainField,
-                env->NewStringUTF(profile.rp_config.profile.selinux_domain));
+        auto domain = env->NewStringUTF(profile.rp_config.profile.selinux_domain);
+        env->SetObjectField(obj, domainField, domain);
+        env->DeleteLocalRef(domain);
         env->SetIntField(obj, namespacesField, profile.rp_config.profile.namespaces);
         env->SetBooleanField(obj, allowSuField, profile.allow_su);
     } else {
@@ -205,13 +261,22 @@ Java_com_qrj_apexsu_Natives_getAppProfile(JNIEnv *env, jobject, jstring pkg, jin
         env->SetBooleanField(obj, umountModulesField, profile.nrp_config.profile.umount_modules);
     }
 
+    env->DeleteLocalRef(cls);
     return obj;
 }
 
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_qrj_apexsu_Natives_setAppProfile(JNIEnv *env, jobject clazz, jobject profile) {
+    if (!profile) {
+        return false;
+    }
+
     auto cls = env->FindClass("com/qrj/apexsu/Natives$Profile");
+    if (!cls) {
+        return false;
+    }
+    bool success = false;
 
     auto keyField = env->GetFieldID(cls, "name", "Ljava/lang/String;");
     auto currentUidField = env->GetFieldID(cls, "currentUid", "I");
@@ -230,69 +295,91 @@ Java_com_qrj_apexsu_Natives_setAppProfile(JNIEnv *env, jobject clazz, jobject pr
     auto nonRootUseDefaultField = env->GetFieldID(cls, "nonRootUseDefault", "Z");
     auto umountModulesField = env->GetFieldID(cls, "umountModules", "Z");
 
-    auto key = env->GetObjectField(profile, keyField);
-    if (!key) {
-        return false;
-    }
-    if (env->GetStringLength((jstring) key) > KSU_MAX_PACKAGE_NAME) {
-        return false;
-    }
-
-    auto cpkg = env->GetStringUTFChars((jstring) key, nullptr);
+    jobject key = env->GetObjectField(profile, keyField);
+    jobject groups = nullptr;
+    jobject capabilities = nullptr;
+    jobject domain = nullptr;
+    jobject templateName = nullptr;
     p_key_t p_key = {};
-    strcpy(p_key, cpkg);
-    env->ReleaseStringUTFChars((jstring) key, cpkg);
-
-    auto currentUid = env->GetIntField(profile, currentUidField);
-
-    auto uid = env->GetIntField(profile, uidField);
-    auto gid = env->GetIntField(profile, gidField);
-    auto groups = env->GetObjectField(profile, groupsField);
-    auto capabilities = env->GetObjectField(profile, capabilitiesField);
-    auto domain = env->GetObjectField(profile, domainField);
-    auto allowSu = env->GetBooleanField(profile, allowSuField);
-    auto umountModules = env->GetBooleanField(profile, umountModulesField);
-
+    int currentUid = 0;
+    int uid = 0;
+    int gid = 0;
+    bool allowSu = false;
+    bool umountModules = false;
     app_profile p = {};
-    p.version = KSU_APP_PROFILE_VER;
 
-    strcpy(p.key, p_key);
-    p.allow_su = allowSu;
-    p.current_uid = currentUid;
-
-    if (allowSu) {
-        p.rp_config.use_default = env->GetBooleanField(profile, rootUseDefaultField);
-        auto templateName = env->GetObjectField(profile, rootTemplateField);
-        if (templateName) {
-            auto ctemplateName = env->GetStringUTFChars((jstring) templateName, nullptr);
-            strcpy(p.rp_config.template_name, ctemplateName);
-            env->ReleaseStringUTFChars((jstring) templateName, ctemplateName);
+    do {
+        if (!key) {
+            break;
+        }
+        if (!copyJStringToFixed(env, (jstring) key, p_key)) {
+            break;
         }
 
-        p.rp_config.profile.uid = uid;
-        p.rp_config.profile.gid = gid;
+        currentUid = env->GetIntField(profile, currentUidField);
+        uid = env->GetIntField(profile, uidField);
+        gid = env->GetIntField(profile, gidField);
+        groups = env->GetObjectField(profile, groupsField);
+        capabilities = env->GetObjectField(profile, capabilitiesField);
+        domain = env->GetObjectField(profile, domainField);
+        allowSu = env->GetBooleanField(profile, allowSuField);
+        umountModules = env->GetBooleanField(profile, umountModulesField);
 
-        int groups_count = getListSize(env, groups);
-        if (groups_count > KSU_MAX_GROUPS) {
-            LOGD("groups count too large: %d", groups_count);
-            return false;
+        p.version = KSU_APP_PROFILE_VER;
+        strcpy(p.key, p_key);
+        p.allow_su = allowSu;
+        p.current_uid = currentUid;
+
+        if (allowSu) {
+            p.rp_config.use_default = env->GetBooleanField(profile, rootUseDefaultField);
+            templateName = env->GetObjectField(profile, rootTemplateField);
+            if (templateName && !copyJStringToFixed(env, (jstring) templateName, p.rp_config.template_name)) {
+                break;
+            }
+
+            p.rp_config.profile.uid = uid;
+            p.rp_config.profile.gid = gid;
+
+            int groups_count = getListSize(env, groups);
+            if (groups_count > KSU_MAX_GROUPS) {
+                LOGD("groups count too large: %d", groups_count);
+                break;
+            }
+            p.rp_config.profile.groups_count = groups_count;
+            fillArrayWithList(env, groups, p.rp_config.profile.groups, groups_count);
+
+            p.rp_config.profile.capabilities.effective = capListToBits(env, capabilities);
+
+            if (!copyJStringToFixed(env, (jstring) domain, p.rp_config.profile.selinux_domain)) {
+                break;
+            }
+
+            p.rp_config.profile.namespaces = env->GetIntField(profile, namespacesField);
+        } else {
+            p.nrp_config.use_default = env->GetBooleanField(profile, nonRootUseDefaultField);
+            p.nrp_config.profile.umount_modules = umountModules;
         }
-        p.rp_config.profile.groups_count = groups_count;
-        fillArrayWithList(env, groups, p.rp_config.profile.groups, groups_count);
 
-        p.rp_config.profile.capabilities.effective = capListToBits(env, capabilities);
+        success = set_app_profile(&p);
+    } while (false);
 
-        auto cdomain = env->GetStringUTFChars((jstring) domain, nullptr);
-        strcpy(p.rp_config.profile.selinux_domain, cdomain);
-        env->ReleaseStringUTFChars((jstring) domain, cdomain);
-
-        p.rp_config.profile.namespaces = env->GetIntField(profile, namespacesField);
-    } else {
-        p.nrp_config.use_default = env->GetBooleanField(profile, nonRootUseDefaultField);
-        p.nrp_config.profile.umount_modules = umountModules;
+    if (templateName) {
+        env->DeleteLocalRef(templateName);
     }
-
-    return set_app_profile(&p);
+    if (domain) {
+        env->DeleteLocalRef(domain);
+    }
+    if (capabilities) {
+        env->DeleteLocalRef(capabilities);
+    }
+    if (groups) {
+        env->DeleteLocalRef(groups);
+    }
+    if (key) {
+        env->DeleteLocalRef(key);
+    }
+    env->DeleteLocalRef(cls);
+    return success;
 }
 extern "C"
 JNIEXPORT jboolean JNICALL

@@ -1,4 +1,8 @@
 //! Kernel supercall interface providing ioctl wrappers for KernelSU driver communication.
+//!
+//! All userspace-to-kernel communication flows through the ksuctl() wrapper.
+//! We use a custom reboot() syscall bridge to secure the driver file descriptor
+//! during early boot.
 
 #![allow(clippy::unreadable_literal)]
 use libc::{_IO, _IOR, _IOW, _IOWR};
@@ -16,10 +20,10 @@ const KSU_IOCTL_GET_INFO: i32 = _IOR::<()>(K, 2);
 const KSU_IOCTL_REPORT_EVENT: i32 = _IOW::<()>(K, 3);
 const KSU_IOCTL_SET_SEPOLICY: i32 = _IOWR::<()>(K, 4);
 const KSU_IOCTL_CHECK_SAFEMODE: i32 = _IOR::<()>(K, 5);
-const KSU_IOCTL_GET_ALLOW_LIST: i32 = _IOWR::<()>(K, 6); // deprecated layout
+const KSU_IOCTL_GET_ALLOW_LIST: i32 = _IOWR::<()>(K, 6);
 const KSU_IOCTL_NEW_GET_ALLOW_LIST: i32 = _IOWR::<NewGetAllowListHdr>(K, 6);
 const KSU_IOCTL_NEW_GET_DENY_LIST: i32 = _IOWR::<NewGetAllowListHdr>(K, 7);
-const KSU_IOCTL_GET_DENY_LIST: i32 = _IOWR::<()>(K, 7); // deprecated layout
+const KSU_IOCTL_GET_DENY_LIST: i32 = _IOWR::<()>(K, 7);
 const KSU_IOCTL_GET_APP_PROFILE: i32 = _IOWR::<()>(K, 11);
 const KSU_IOCTL_SET_APP_PROFILE: i32 = _IOW::<()>(K, 12);
 const KSU_IOCTL_GET_FEATURE: i32 = _IOWR::<()>(K, 13);
@@ -121,27 +125,26 @@ pub struct NukeExt4SysfsCmd {
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct AddTryUmountCmd {
-    arg: u64,   // char ptr, this is the mountpoint
-    flags: u32, // this is the flag we use for it
-    mode: u8,   // denotes what to do with it 0:wipe_list 1:add_to_list 2:delete_entry
+    arg: u64,
+    flags: u32,
+    mode: u8,
 }
 
-// Mark operation constants
 const KSU_MARK_GET: u32 = 1;
 const KSU_MARK_MARK: u32 = 2;
 const KSU_MARK_UNMARK: u32 = 3;
 const KSU_MARK_REFRESH: u32 = 4;
 
-// Umount operation constants
 const KSU_UMOUNT_WIPE: u8 = 0;
 const KSU_UMOUNT_ADD: u8 = 1;
 const KSU_UMOUNT_DEL: u8 = 2;
 const KSU_IOCTL_PATH_MAX: usize = 256;
 
-// Global driver fd cache
 static DRIVER_FD: OnceLock<RawFd> = OnceLock::new();
 static INFO_CACHE: OnceLock<GetInfoCmd> = OnceLock::new();
 
+/* Driver FDs are disguised as anonymous inodes to avoid detection 
+ * by simple /proc/self/fd scanners. */
 const KSU_INSTALL_MAGIC1: u32 = 0xDEADBEEF;
 const KSU_INSTALL_MAGIC2: u32 = 0xCAFEBABE;
 const KSU_DRIVER_FD_NAME: &str = "[ksu_driver]";
@@ -164,13 +167,12 @@ fn scan_driver_fd() -> Option<RawFd> {
     None
 }
 
-// Get cached driver fd
 fn init_driver_fd() -> Option<RawFd> {
     let fd = scan_driver_fd();
     if fd.is_none() {
         let mut fd = -1;
-        // SAFETY: syscall invoked with KSU-specific reboot magic constants
-        // and a valid mutable pointer to receive the driver fd.
+        /* SAFETY: KSU intercept reboot(2) when specific magic numbers are provided 
+         * to return the driver handle instead of rebooting. */
         unsafe {
             libc::syscall(
                 libc::SYS_reboot,
@@ -186,12 +188,13 @@ fn init_driver_fd() -> Option<RawFd> {
     }
 }
 
-// ioctl wrapper using libc
+/// Core IOCTL dispatcher. All supercalls eventually land here.
 fn ksuctl<T>(request: i32, arg: *mut T) -> std::io::Result<i32> {
     use std::io;
 
     let fd = *DRIVER_FD.get_or_init(|| init_driver_fd().unwrap_or(-1));
-    // SAFETY: fd is a valid driver file descriptor and arg points to a caller-owned T.
+    /* SAFETY: fd is the driver handle; arg must point to a C-compatible repr(C) struct 
+     * matched to the specific IOCTL request. */
     unsafe {
         let ret = libc::ioctl(fd as libc::c_int, request, arg);
         if ret < 0 {
@@ -202,15 +205,9 @@ fn ksuctl<T>(request: i32, arg: *mut T) -> std::io::Result<i32> {
     }
 }
 
-// API implementations
 fn get_info() -> GetInfoCmd {
     *INFO_CACHE.get_or_init(|| {
-        let mut cmd = GetInfoCmd {
-            version: 0,
-            flags: 0,
-            features: 0,
-        };
-        // Best-effort: falls back to default (0, 0) if kernel module unavailable
+        let mut cmd = GetInfoCmd::default();
         if let Err(e) = ksuctl(KSU_IOCTL_GET_INFO, &raw mut cmd) {
             log::warn!("Failed to get KSU info from kernel: {e}");
         }
@@ -218,10 +215,12 @@ fn get_info() -> GetInfoCmd {
     })
 }
 
+/// Returns the KernelSU version code reported by the driver.
 pub fn get_version() -> i32 {
     get_info().version as i32
 }
 
+/// Signals the kernel to elevate current process credentials to root.
 pub fn grant_root() -> std::io::Result<()> {
     ksuctl(KSU_IOCTL_GRANT_ROOT, std::ptr::null_mut::<u8>())?;
     Ok(())
@@ -229,7 +228,6 @@ pub fn grant_root() -> std::io::Result<()> {
 
 fn report_event(event: u32) {
     let mut cmd = ReportEventCmd { event };
-    // Best-effort: event reporting is non-critical
     if let Err(e) = ksuctl(KSU_IOCTL_REPORT_EVENT, &raw mut cmd) {
         log::warn!("Failed to report event {event} to kernel: {e}");
     }
@@ -243,24 +241,25 @@ pub fn report_module_mounted() {
     report_event(EVENT_MODULE_MOUNTED);
 }
 
+/// Checks if KernelSU is in 'Safe Mode' (all modules disabled).
 pub fn check_kernel_safemode() -> bool {
     let mut cmd = CheckSafemodeCmd { in_safe_mode: 0 };
     if let Err(e) = ksuctl(KSU_IOCTL_CHECK_SAFEMODE, &raw mut cmd) {
-        // Default to safemode on error — safer than allowing modules to load
+        /* fail-closed: if we can't communicate, assume safemode for safety */
         log::warn!("Failed to check safemode, assuming safe mode: {e}");
         return true;
     }
     cmd.in_safe_mode != 0
 }
 
+/// Directly applies an SELinux policy command to the kernel.
 pub fn set_sepolicy(cmd: &SetSepolicyCmd) -> std::io::Result<()> {
     let mut ioctl_cmd = *cmd;
     ksuctl(KSU_IOCTL_SET_SEPOLICY, &raw mut ioctl_cmd)?;
     Ok(())
 }
 
-/// Get feature value and support status from kernel
-/// Returns (value, supported)
+/// Queries feature support and current value from the kernel.
 pub fn get_feature(feature_id: u32) -> std::io::Result<(u64, bool)> {
     let mut cmd = GetFeatureCmd {
         feature_id,
@@ -271,20 +270,21 @@ pub fn get_feature(feature_id: u32) -> std::io::Result<(u64, bool)> {
     Ok((cmd.value, cmd.supported != 0))
 }
 
-/// Set feature value in kernel
+/// Sets a kernel feature value.
 pub fn set_feature(feature_id: u32, value: u64) -> std::io::Result<()> {
     let mut cmd = SetFeatureCmd { feature_id, value };
     ksuctl(KSU_IOCTL_SET_FEATURE, &raw mut cmd)?;
     Ok(())
 }
 
+/// Obtains a wrapped FD for TTY access under strict SELinux.
 pub fn get_wrapped_fd(fd: RawFd) -> std::io::Result<RawFd> {
     let mut cmd = GetWrapperFdCmd { fd, flags: 0 };
     let result = ksuctl(KSU_IOCTL_GET_WRAPPER_FD, &raw mut cmd)?;
     Ok(result)
 }
 
-/// Get mark status for a process (pid=0 returns total marked count)
+/// Returns the mark status for a given PID.
 pub fn mark_get(pid: i32) -> std::io::Result<u32> {
     let mut cmd = ManageMarkCmd {
         operation: KSU_MARK_GET,
@@ -295,7 +295,6 @@ pub fn mark_get(pid: i32) -> std::io::Result<u32> {
     Ok(cmd.result)
 }
 
-/// Mark a process (pid=0 marks all processes)
 pub fn mark_set(pid: i32) -> std::io::Result<()> {
     let mut cmd = ManageMarkCmd {
         operation: KSU_MARK_MARK,
@@ -306,7 +305,6 @@ pub fn mark_set(pid: i32) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Unmark a process (pid=0 unmarks all processes)
 pub fn mark_unset(pid: i32) -> std::io::Result<()> {
     let mut cmd = ManageMarkCmd {
         operation: KSU_MARK_UNMARK,
@@ -317,7 +315,6 @@ pub fn mark_unset(pid: i32) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Refresh mark for all running processes
 pub fn mark_refresh() -> std::io::Result<()> {
     let mut cmd = ManageMarkCmd {
         operation: KSU_MARK_REFRESH,
@@ -328,6 +325,7 @@ pub fn mark_refresh() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Fetches the current allowlist or denylist from the kernel.
 pub fn get_allow_list(array: &mut [i32], allow: bool) -> std::io::Result<(u16, u16)> {
     use std::io::{Error, ErrorKind};
 
@@ -344,10 +342,11 @@ pub fn get_allow_list(array: &mut [i32], allow: bool) -> std::io::Result<(u16, u
         ));
     }
 
+    /* ABI structure: [Header (4 bytes)] + [UIDs (count * 4 bytes)] */
     let mut wire = vec![0_u8; std::mem::size_of::<NewGetAllowListHdr>() + (array.len() * 4)];
     let header_ptr = wire.as_mut_ptr().cast::<NewGetAllowListHdr>();
-    // SAFETY: wire is allocated with enough size for header and aligned for u8;
-    // read/write_unaligned avoids alignment assumptions.
+    
+    // SAFETY: buffer is correctly sized and alignment is handled via write_unaligned.
     unsafe {
         std::ptr::write_unaligned(
             header_ptr,
@@ -367,6 +366,7 @@ pub fn get_allow_list(array: &mut [i32], allow: bool) -> std::io::Result<(u16, u
     let new_result = ksuctl(request, wire.as_mut_ptr());
     match new_result {
         Ok(_) => {
+            // SAFETY: buffer populated by kernel.
             let header = unsafe { std::ptr::read_unaligned(header_ptr) };
             let out_len = usize::from(header.count).min(array.len());
             let out_total = header.total_count;
@@ -385,7 +385,7 @@ pub fn get_allow_list(array: &mut [i32], allow: bool) -> std::io::Result<(u16, u
         }
         Err(err) if matches!(err.raw_os_error(), Some(libc::ENOTTY) | Some(libc::EINVAL)) => {
             log::warn!(
-                "Kernel does not support NEW_GET_ALLOW_LIST ioctl, falling back to deprecated ABI: {err}"
+                "Kernel does not support NEW_GET_ALLOW_LIST ioctl, falling back to deprecated ABI"
             );
         }
         Err(err) => {
@@ -394,7 +394,6 @@ pub fn get_allow_list(array: &mut [i32], allow: bool) -> std::io::Result<(u16, u
         }
     }
 
-    // Deprecated ABI fallback for older kernels.
     let mut cmd = GetAllowListCmd {
         uids: [0; 128],
         count: 0,
@@ -418,6 +417,7 @@ pub fn get_allow_list(array: &mut [i32], allow: bool) -> std::io::Result<(u16, u
     Ok((out_len_u16, total_u16))
 }
 
+/// Retrieves the root profile for a specific UID.
 pub fn get_app_profile(uid: i32) -> std::io::Result<crate::ksu_types::AppProfile> {
     let mut cmd = GetAppProfileCmd {
         profile: crate::ksu_types::AppProfile {
@@ -432,6 +432,7 @@ pub fn get_app_profile(uid: i32) -> std::io::Result<crate::ksu_types::AppProfile
     Ok(cmd.profile)
 }
 
+/// Updates the root profile for a specific UID.
 pub fn set_app_profile(profile: &crate::ksu_types::AppProfile) -> std::io::Result<()> {
     profile
         .validate_abi_strings()
@@ -456,7 +457,6 @@ pub fn nuke_ext4_sysfs(mnt: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Wipe all entries from umount list
 pub fn umount_list_wipe() -> std::io::Result<()> {
     let mut cmd = AddTryUmountCmd {
         arg: 0,
@@ -467,7 +467,6 @@ pub fn umount_list_wipe() -> std::io::Result<()> {
     Ok(())
 }
 
-/// Add mount point to umount list
 pub fn umount_list_add(path: &str, flags: u32) -> anyhow::Result<()> {
     validate_ioctl_cstr(path, KSU_IOCTL_PATH_MAX)?;
     let c_path = std::ffi::CString::new(path)?;
@@ -480,7 +479,6 @@ pub fn umount_list_add(path: &str, flags: u32) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Delete mount point from umount list
 pub fn umount_list_del(path: &str) -> anyhow::Result<()> {
     validate_ioctl_cstr(path, KSU_IOCTL_PATH_MAX)?;
     let c_path = std::ffi::CString::new(path)?;
@@ -495,6 +493,8 @@ pub fn umount_list_del(path: &str) -> anyhow::Result<()> {
 
 const _: () = {
     use std::mem::{offset_of, size_of};
+    /* Compile-time verification of ABI layout. Mismatched layouts 
+     * between userspace and kernel result in garbage data or crashes. */
     assert!(size_of::<GetInfoCmd>() == 12);
     assert!(offset_of!(GetInfoCmd, version) == 0);
     assert!(offset_of!(GetInfoCmd, flags) == 4);

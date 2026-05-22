@@ -576,7 +576,7 @@ int ksu_install_file_wrapper(int fd)
     }
 
     struct file *wrapper_file = ksu_anon_inode_create_getfile_compat(
-        "[io_worker]", &file_wrapper_data->ops, file_wrapper_data,
+        ksu_anon_inode_name, &file_wrapper_data->ops, file_wrapper_data,
         orig_file->f_flags, NULL);
     if (IS_ERR(wrapper_file)) {
         pr_err("fdwrapper: getfile failed: %ld\n", PTR_ERR(wrapper_file));
@@ -645,5 +645,8 @@ void ksu_file_wrapper_init(void)
         pr_err("file_wrapper: initialize anon_inode_mnt failed, got NULL\n");
     }
     fput(dummy);
+#endif
+}
+(dummy);
 #endif
 }

@@ -29,6 +29,8 @@ import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.DeveloperMode
 import androidx.compose.material.icons.rounded.Fence
 import androidx.compose.material.icons.rounded.FolderDelete
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RemoveCircle
 import androidx.compose.material.icons.rounded.RemoveModerator
@@ -44,6 +46,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -56,14 +59,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import com.qrj.apexsu.BuildConfig
 import com.qrj.apexsu.KernelSUApplication
 import com.qrj.apexsu.Natives
 import com.qrj.apexsu.R
+import com.qrj.apexsu.getKernelVersion
 import com.qrj.apexsu.ui.component.KsuIsValid
 import com.qrj.apexsu.ui.component.ScaleDialog
 import com.qrj.apexsu.ui.component.SendLogDialog
@@ -74,12 +81,16 @@ import com.qrj.apexsu.ui.navigation3.Route
 import com.qrj.apexsu.ui.util.execKsud
 import com.qrj.apexsu.ui.util.getFeaturePersistValue
 import com.qrj.apexsu.ui.util.getFeatureStatus
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.SliderDefaults
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.extra.SuperArrow
@@ -133,6 +144,7 @@ fun SettingPager(
         val activity = LocalActivity.current
 
         val loadingDialog = rememberLoadingDialog()
+        val scope = rememberCoroutineScope()
         val showScaleDialog = rememberSaveable { mutableStateOf(false) }
         val showUninstallDialog = rememberSaveable { mutableStateOf(false) }
         val showSendLogDialog = rememberSaveable { mutableStateOf(false) }
@@ -149,6 +161,10 @@ fun SettingPager(
             overscrollEffect = null,
         ) {
             item {
+                SmallTitle(
+                    text = stringResource(R.string.settings_section_general),
+                    modifier = Modifier.padding(top = 6.dp)
+                )
                 var checkUpdate by rememberSaveable {
                     mutableStateOf(prefs.getBoolean("check_update", true))
                 }
@@ -201,8 +217,46 @@ fun SettingPager(
                             }
                         )
                     }
+                    val languageTags = remember {
+                        listOf("", "en", "id", "zh-CN", "ar")
+                    }
+                    val languageItems = listOf(
+                        stringResource(R.string.language_system),
+                        stringResource(R.string.language_en),
+                        stringResource(R.string.language_id),
+                        stringResource(R.string.language_zh_cn),
+                        stringResource(R.string.language_ar),
+                    )
+                    val currentLanguage = AppCompatDelegate.getApplicationLocales().toLanguageTags()
+                    var selectedLanguage by rememberSaveable(currentLanguage) {
+                        mutableIntStateOf(languageTags.indexOf(currentLanguage).takeIf { it >= 0 } ?: 0)
+                    }
+                    SuperDropdown(
+                        title = stringResource(id = R.string.settings_language),
+                        summary = stringResource(id = R.string.settings_language_summary),
+                        items = languageItems,
+                        startAction = {
+                            Icon(
+                                Icons.Rounded.Language,
+                                modifier = Modifier.padding(end = 6.dp),
+                                contentDescription = stringResource(id = R.string.settings_language),
+                                tint = colorScheme.onBackground
+                            )
+                        },
+                        selectedIndex = selectedLanguage,
+                        onSelectedIndexChange = { index ->
+                            selectedLanguage = index
+                            AppCompatDelegate.setApplicationLocales(
+                                LocaleListCompat.forLanguageTags(languageTags[index])
+                            )
+                        }
+                    )
                 }
 
+                SmallTitle(
+                    text = stringResource(R.string.settings_section_appearance),
+                    modifier = Modifier.padding(top = 12.dp)
+                )
                 Card(
                     modifier = Modifier
                         .padding(top = 12.dp)
@@ -441,6 +495,10 @@ fun SettingPager(
                 }
 
                 KsuIsValid {
+                    SmallTitle(
+                        text = stringResource(R.string.settings_section_root),
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
                     Card(
                         modifier = Modifier
                             .padding(top = 12.dp)
@@ -477,7 +535,9 @@ fun SettingPager(
                             stringResource(id = R.string.settings_mode_disable_always),
                         )
 
-                        val currentSuEnabled = Natives.isSuEnabled()
+                        val currentSuEnabled by produceState(initialValue = true) {
+                            value = withContext(Dispatchers.IO) { Natives.isSuEnabled() }
+                        }
                         var suCompatMode by rememberSaveable { mutableIntStateOf(if (!currentSuEnabled) 1 else 0) }
                         val suPersistValue by produceState(initialValue = null as Long?) {
                             value = getFeaturePersistValue("su_compat")
@@ -510,34 +570,46 @@ fun SettingPager(
                             enabled = suStatus == "supported",
                             selectedIndex = suCompatMode,
                             onSelectedIndexChange = { index ->
-                                when (index) {
-                                    // Default: enable and save to persist
-                                    0 -> if (Natives.setSuEnabled(true)) {
-                                        execKsud("feature save", true)
-                                        prefs.edit { putInt("su_compat_mode", 0) }
-                                        suCompatMode = 0
-                                    }
+                                scope.launch {
+                                    val success = withContext(Dispatchers.IO) {
+                                        when (index) {
+                                            // Default: enable and save to persist
+                                            0 -> Natives.setSuEnabled(true).also { ok ->
+                                                if (ok) execKsud("feature save", true)
+                                            }
 
-                                    // Temporarily disable: save enabled state first, then disable
-                                    1 -> if (Natives.setSuEnabled(true)) {
-                                        execKsud("feature save", true)
-                                        if (Natives.setSuEnabled(false)) {
-                                            prefs.edit { putInt("su_compat_mode", 0) }
-                                            suCompatMode = 1
+                                            // Temporarily disable: save enabled state first, then disable
+                                            1 -> {
+                                                if (!Natives.setSuEnabled(true)) {
+                                                    false
+                                                } else {
+                                                    execKsud("feature save", true)
+                                                    Natives.setSuEnabled(false)
+                                                }
+                                            }
+
+                                            // Permanently disable: disable and save
+                                            2 -> Natives.setSuEnabled(false).also { ok ->
+                                                if (ok) execKsud("feature save", true)
+                                            }
+
+                                            else -> false
                                         }
                                     }
-
-                                    // Permanently disable: disable and save
-                                    2 -> if (Natives.setSuEnabled(false)) {
-                                        execKsud("feature save", true)
-                                        prefs.edit { putInt("su_compat_mode", 2) }
-                                        suCompatMode = 2
+                                    if (success) {
+                                        prefs.edit { putInt("su_compat_mode", if (index == 2) 2 else 0) }
+                                        suCompatMode = index
                                     }
                                 }
                             }
                         )
 
-                        var isKernelUmountEnabled by rememberSaveable { mutableStateOf(Natives.isKernelUmountEnabled()) }
+                        var isKernelUmountEnabled by rememberSaveable { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            isKernelUmountEnabled = withContext(Dispatchers.IO) {
+                                Natives.isKernelUmountEnabled()
+                            }
+                        }
                         val umountStatus by produceState(initialValue = "") {
                             value = getFeatureStatus("kernel_umount")
                         }
@@ -560,14 +632,25 @@ fun SettingPager(
                             enabled = umountStatus == "supported",
                             checked = isKernelUmountEnabled,
                             onCheckedChange = { checked ->
-                                if (Natives.setKernelUmountEnabled(checked)) {
-                                    execKsud("feature save", true)
-                                    isKernelUmountEnabled = checked
+                                scope.launch {
+                                    val success = withContext(Dispatchers.IO) {
+                                        Natives.setKernelUmountEnabled(checked).also { ok ->
+                                            if (ok) execKsud("feature save", true)
+                                        }
+                                    }
+                                    if (success) {
+                                        isKernelUmountEnabled = checked
+                                    }
                                 }
                             }
                         )
 
-                        var umountChecked by rememberSaveable { mutableStateOf(Natives.isDefaultUmountModules()) }
+                        var umountChecked by rememberSaveable { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            umountChecked = withContext(Dispatchers.IO) {
+                                Natives.isDefaultUmountModules()
+                            }
+                        }
                         SuperSwitch(
                             title = stringResource(id = R.string.settings_umount_modules_default),
                             summary = stringResource(id = R.string.settings_umount_modules_default_summary),
@@ -580,9 +663,14 @@ fun SettingPager(
                                 )
                             },
                             checked = umountChecked,
-                            onCheckedChange = {
-                                if (Natives.setDefaultUmountModules(it)) {
-                                    umountChecked = it
+                            onCheckedChange = { checked ->
+                                scope.launch {
+                                    val success = withContext(Dispatchers.IO) {
+                                        Natives.setDefaultUmountModules(checked)
+                                    }
+                                    if (success) {
+                                        umountChecked = checked
+                                    }
                                 }
                             }
                         )
@@ -638,6 +726,10 @@ fun SettingPager(
                     }
                 }
 
+                SmallTitle(
+                    text = stringResource(R.string.settings_section_maintenance),
+                    modifier = Modifier.padding(top = 12.dp)
+                )
                 Card(
                     modifier = Modifier
                         .padding(vertical = 12.dp)
@@ -658,6 +750,41 @@ fun SettingPager(
                         },
                     )
                     SendLogDialog(showSendLogDialog, loadingDialog)
+                }
+
+                SmallTitle(
+                    text = stringResource(R.string.settings_section_about),
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                Card(
+                    modifier = Modifier
+                        .padding(vertical = 12.dp)
+                        .fillMaxWidth(),
+                ) {
+                    SuperArrow(
+                        title = stringResource(id = R.string.settings_about_version),
+                        summary = BuildConfig.VERSION_NAME,
+                        startAction = {
+                            Icon(
+                                Icons.Rounded.Info,
+                                modifier = Modifier.padding(end = 6.dp),
+                                contentDescription = stringResource(id = R.string.settings_about_version),
+                                tint = colorScheme.onBackground
+                            )
+                        },
+                    )
+                    SuperArrow(
+                        title = stringResource(id = R.string.settings_about_build),
+                        summary = BuildConfig.VERSION_CODE.toString(),
+                    )
+                    SuperArrow(
+                        title = stringResource(id = R.string.settings_about_kernel),
+                        summary = getKernelVersion().toString(),
+                    )
+                    SuperArrow(
+                        title = stringResource(id = R.string.settings_about_github),
+                        summary = "github.com/qrjhamron/ApexSU",
+                    )
                     val about = stringResource(id = R.string.about)
                     SuperArrow(
                         title = about,

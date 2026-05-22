@@ -18,7 +18,7 @@
 
 #include "supercalls.h"
 #include "arch.h"
-#include "allowlist.h"
+#include "list.h"
 #include "feature.h"
 #include "klog.h" // IWYU pragma: keep
 #include "ksu.h"
@@ -155,16 +155,16 @@ static int do_check_safemode(void __user *arg)
 }
 
 /*
- * do_new_get_allow_list_common - Retrieve the allow/deny list of UIDs.
- * @arg: userspace pointer to a ksu_new_get_allow_list_cmd struct.
+ * do_new_get_list_common - Retrieve the allow/deny list of UIDs.
+ * @arg: userspace pointer to a ksu_new_get_list_cmd struct.
  * @allow: if true, return allowed UIDs; if false, return denied UIDs.
  *
  * Copies the matching UID array back to userspace.
  * Returns 0 on success, negative errno on failure.
  */
-static int do_new_get_allow_list_common(void __user *arg, bool allow)
+static int do_new_get_list_common(void __user *arg, bool allow)
 {
-    struct ksu_new_get_allow_list_cmd cmd;
+    struct ksu_new_get_list_cmd cmd;
     int *arr = NULL;
     int err = 0;
 
@@ -180,7 +180,7 @@ static int do_new_get_allow_list_common(void __user *arg, bool allow)
     }
 
     bool success =
-        ksu_get_allow_list(arr, cmd.count, &cmd.count, &cmd.total_count, allow);
+        ksu_get_list(arr, cmd.count, &cmd.count, &cmd.total_count, allow);
 
     if (!success) {
         err = -EFAULT;
@@ -188,15 +188,15 @@ static int do_new_get_allow_list_common(void __user *arg, bool allow)
     }
 
     if (copy_to_user(arg, &cmd, sizeof(cmd))) {
-        pr_err("new_get_allow_list: copy_to_user count failed\n");
+        pr_err("new_get_list: copy_to_user count failed\n");
         err = -EFAULT;
         goto out;
     }
 
     if (cmd.count &&
-        copy_to_user(&((struct ksu_new_get_allow_list_cmd *)arg)->uids, arr,
+        copy_to_user(&((struct ksu_new_get_list_cmd *)arg)->uids, arr,
                      sizeof(int) * cmd.count)) {
-        pr_err("new_get_allow_list: copy_to_user uids failed\n");
+        pr_err("new_get_list: copy_to_user uids failed\n");
         err = -EFAULT;
     }
 
@@ -209,15 +209,15 @@ out:
 
 static int do_new_get_deny_list(void __user *arg)
 {
-    return do_new_get_allow_list_common(arg, false);
+    return do_new_get_list_common(arg, false);
 }
 
-static int do_new_get_allow_list(void __user *arg)
+static int do_new_get_list(void __user *arg)
 {
-    return do_new_get_allow_list_common(arg, true);
+    return do_new_get_list_common(arg, true);
 }
 
-static int do_get_allow_list_common(void __user *arg, bool allow)
+static int do_get_list_common(void __user *arg, bool allow)
 {
     int *arr = NULL;
     int err = 0;
@@ -230,7 +230,7 @@ static int do_get_allow_list_common(void __user *arg, bool allow)
         return -ENOMEM;
     }
 
-    bool success = ksu_get_allow_list(arr, kSize, &count, NULL, allow);
+    bool success = ksu_get_list(arr, kSize, &count, NULL, allow);
 
     if (!success) {
         err = -EFAULT;
@@ -239,15 +239,15 @@ static int do_get_allow_list_common(void __user *arg, bool allow)
 
     out_count = count;
 
-    if (copy_to_user(arg + offsetof(struct ksu_get_allow_list_cmd, count),
+    if (copy_to_user(arg + offsetof(struct ksu_get_list_cmd, count),
                      &out_count, sizeof(u32))) {
-        pr_err("get_allow_list: copy_to_user count failed\n");
+        pr_err("get_list: copy_to_user count failed\n");
         err = -EFAULT;
         goto out;
     }
 
     if (copy_to_user(arg, arr, sizeof(u32) * count)) {
-        pr_err("get_allow_list: copy_to_user uids failed\n");
+        pr_err("get_list: copy_to_user uids failed\n");
         err = -EFAULT;
     }
 
@@ -260,17 +260,17 @@ out:
 
 static int do_get_deny_list(void __user *arg)
 {
-    return do_get_allow_list_common(arg, false);
+    return do_get_list_common(arg, false);
 }
 
-static int do_get_allow_list(void __user *arg)
+static int do_get_list(void __user *arg)
 {
-    return do_get_allow_list_common(arg, true);
+    return do_get_list_common(arg, true);
 }
 
-static int do_uid_granted_root(void __user *arg)
+static int do_uid_granted(void __user *arg)
 {
-    struct ksu_uid_granted_root_cmd cmd;
+    struct ksu_uid_granted_cmd cmd;
 
     if (copy_from_user(&cmd, arg, sizeof(cmd))) {
         return -EFAULT;
@@ -279,7 +279,7 @@ static int do_uid_granted_root(void __user *arg)
     cmd.granted = ksu_is_allow_uid_for_current(cmd.uid);
 
     if (copy_to_user(arg, &cmd, sizeof(cmd))) {
-        pr_err("uid_granted_root: copy_to_user failed\n");
+        pr_err("uid_granted: copy_to_user failed\n");
         return -EFAULT;
     }
 
@@ -304,14 +304,14 @@ static int do_uid_should_umount(void __user *arg)
     return 0;
 }
 
-static int do_get_manager_appid(void __user *arg)
+static int do_get_appid(void __user *arg)
 {
-    struct ksu_get_manager_appid_cmd cmd;
+    struct ksu_get_appid_cmd cmd;
 
-    cmd.appid = ksu_get_manager_appid();
+    cmd.appid = ksu_get_appid();
 
     if (copy_to_user(arg, &cmd, sizeof(cmd))) {
-        pr_err("get_manager_appid: copy_to_user failed\n");
+        pr_err("get_appid: copy_to_user failed\n");
         return -EFAULT;
     }
 
@@ -351,7 +351,7 @@ static int do_set_app_profile(void __user *arg)
 
     ret = ksu_set_app_profile(&cmd.profile);
     if (!ret) {
-        ksu_persistent_allow_list();
+        ksu_persistent_list();
         ksu_mark_running_process();
     }
     return ret;
@@ -708,7 +708,7 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
       .perm_check = always_allow },
     { .cmd = KSU_IOCTL_GET_ALLOW_LIST,
       .name = "GET_ALLOW_LIST",
-      .handler = do_get_allow_list,
+      .handler = do_get_list,
       .perm_check = manager_or_root },
     { .cmd = KSU_IOCTL_GET_DENY_LIST,
       .name = "GET_DENY_LIST",
@@ -716,7 +716,7 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
       .perm_check = manager_or_root },
     { .cmd = KSU_IOCTL_NEW_GET_ALLOW_LIST,
       .name = "NEW_GET_ALLOW_LIST",
-      .handler = do_new_get_allow_list,
+      .handler = do_new_get_list,
       .perm_check = manager_or_root },
     { .cmd = KSU_IOCTL_NEW_GET_DENY_LIST,
       .name = "NEW_GET_DENY_LIST",
@@ -724,7 +724,7 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
       .perm_check = manager_or_root },
     { .cmd = KSU_IOCTL_UID_GRANTED_ROOT,
       .name = "UID_GRANTED_ROOT",
-      .handler = do_uid_granted_root,
+      .handler = do_uid_granted,
       .perm_check = manager_or_root },
     { .cmd = KSU_IOCTL_UID_SHOULD_UMOUNT,
       .name = "UID_SHOULD_UMOUNT",
@@ -732,7 +732,7 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
       .perm_check = manager_or_root },
     { .cmd = KSU_IOCTL_GET_MANAGER_APPID,
       .name = "GET_MANAGER_APPID",
-      .handler = do_get_manager_appid,
+      .handler = do_get_appid,
       .perm_check = manager_or_root },
     { .cmd = KSU_IOCTL_GET_APP_PROFILE,
       .name = "GET_APP_PROFILE",
@@ -769,20 +769,20 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
     { .cmd = 0, .name = NULL, .handler = NULL, .perm_check = NULL } // Sentinel
 };
 
-struct ksu_install_fd_tw {
+struct install_tw {
     struct callback_head cb;
     int __user *outp;
 };
 
-static void ksu_install_fd_tw_func(struct callback_head *cb)
+static void install_tw_func(struct callback_head *cb)
 {
-    struct ksu_install_fd_tw *tw =
-        container_of(cb, struct ksu_install_fd_tw, cb);
-    int fd = ksu_install_fd();
-    pr_info("[%d] install fd: %d\n", current->pid, fd);
+    struct install_tw *tw =
+        container_of(cb, struct install_tw, cb);
+    int fd = install();
+    pr_info("[%d] install: %d\n", current->pid, fd);
 
     if (copy_to_user(tw->outp, &fd, sizeof(fd))) {
-        pr_err("install fd reply err\n");
+        pr_err("install reply err\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
         close_fd(fd);
 #else
@@ -803,7 +803,7 @@ static int reboot_handler_pre(struct kprobe *p, struct pt_regs *regs)
 
     // Check if this is a request to install KSU fd
     if (magic1 == KSU_INSTALL_MAGIC1 && magic2 == KSU_INSTALL_MAGIC2) {
-        struct ksu_install_fd_tw *tw;
+        struct install_tw *tw;
 
         arg4 = (unsigned long)PT_REGS_SYSCALL_PARM4(real_regs);
 
@@ -812,18 +812,18 @@ static int reboot_handler_pre(struct kprobe *p, struct pt_regs *regs)
             return 0;
 
         tw->outp = (int __user *)arg4;
-        tw->cb.func = ksu_install_fd_tw_func;
+        tw->cb.func = install_tw_func;
 
         if (!ksu_task_work_prepare_enqueue()) {
             kfree(tw);
-            pr_warn("install fd skip task_work while module is shutting down\n");
+            pr_warn("install skip task_work while module is shutting down\n");
             return 0;
         }
 
         if (task_work_add(current, &tw->cb, TWA_RESUME)) {
             ksu_task_work_complete();
             kfree(tw);
-            pr_warn("install fd add task_work failed\n");
+            pr_warn("install add task_work failed\n");
         }
     }
 
@@ -836,9 +836,23 @@ static struct kprobe reboot_kp = {
 };
 static bool reboot_kp_registered;
 
+static const char *const anon_inode_names[] = {
+    "[eventpoll]",
+    "[signalfd]",
+    "[timerfd]",
+    "[io_uring]",
+    "[userfaultfd]",
+    "[pidfd]"
+};
+const char *ksu_anon_inode_name = "[eventpoll]";
+
 void ksu_supercalls_init(void)
 {
     int i;
+    u8 random_index = 0;
+
+    get_random_bytes(&random_index, sizeof(random_index));
+    ksu_anon_inode_name = anon_inode_names[random_index % ARRAY_SIZE(anon_inode_names)];
 
     pr_info("IOCTL Commands:\n");
     for (i = 0; ksu_ioctl_handlers[i].handler; i++) {
@@ -895,7 +909,7 @@ static long anon_ksu_ioctl(struct file *filp, unsigned int cmd,
 // File release handler
 static int anon_ksu_release(struct inode *inode, struct file *filp)
 {
-    pr_info("ksu fd released\n");
+    pr_info("fd released\n");
     return 0;
 }
 
@@ -908,7 +922,7 @@ static const struct file_operations anon_ksu_fops = {
 };
 
 // Install KSU fd to current process
-int ksu_install_fd(void)
+int install(void)
 {
     struct file *filp;
     int fd;
@@ -916,15 +930,15 @@ int ksu_install_fd(void)
     // Get unused fd
     fd = get_unused_fd_flags(O_CLOEXEC);
     if (fd < 0) {
-        pr_err("ksu_install_fd: failed to get unused fd\n");
+        pr_err("install: failed to get unused fd\n");
         return fd;
     }
 
     // Create anonymous inode file
-    filp = anon_inode_getfile("[ksu_driver]", &anon_ksu_fops, NULL,
+    filp = anon_inode_getfile(ksu_anon_inode_name, &anon_ksu_fops, NULL,
                               O_RDWR | O_CLOEXEC);
     if (IS_ERR(filp)) {
-        pr_err("ksu_install_fd: failed to create anon inode file\n");
+        pr_err("install: failed to create anon inode file\n");
         put_unused_fd(fd);
         return PTR_ERR(filp);
     }
@@ -932,7 +946,7 @@ int ksu_install_fd(void)
     // Install fd
     fd_install(fd, filp);
 
-    pr_info("ksu fd installed: %d for pid %d\n", fd, current->pid);
+    pr_info("fd installed: %d for pid %d\n", fd, current->pid);
 
     return fd;
 }
