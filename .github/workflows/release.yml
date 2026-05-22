@@ -7,14 +7,22 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build-manager:
     uses: ./.github/workflows/build-manager.yml
     secrets: inherit
+  release-readiness:
+    needs:
+      - build-manager
+    uses: ./.github/workflows/release-readiness.yml
+    secrets: inherit
   release:
     needs:
       - build-manager
+      - release-readiness
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -38,6 +46,32 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R
 
+      - name: Generate SHA256SUMS
+        run: |
+          find manager android*-lkm ksud ksuinit -type f -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > SHA256SUMS
+          test -s SHA256SUMS || { echo "SHA256SUMS generation failed"; exit 1; }
+
+      - name: Generate lightweight SBOM
+        run: |
+          {
+            echo "{"
+            echo "  \"name\": \"ApexSU release artifacts\","
+            echo "  \"version\": \"${GITHUB_REF_NAME}\","
+            echo "  \"artifacts\": ["
+            find manager android*-lkm ksud ksuinit -type f | sed 's/.*/    {\"path\":\"&\"},/'
+            echo "    {\"path\":\"SHA256SUMS\"}"
+            echo "  ]"
+            echo "}"
+          } > RELEASE_SBOM.json
+          test -s RELEASE_SBOM.json || { echo "SBOM generation failed"; exit 1; }
+
+      - name: Attest release checksums
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: SHA256SUMS
+
       - name: release
         uses: softprops/action-gh-release@v2
         with:
@@ -46,3 +80,5 @@ jobs:
             android*-lkm/*_kernelsu.ko
             ksud/ksud-*
             ksuinit/**
+            SHA256SUMS
+            RELEASE_SBOM.json
