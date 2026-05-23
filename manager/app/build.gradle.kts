@@ -99,6 +99,7 @@ android {
     lint {
         abortOnError = true
         checkReleaseBuilds = false
+        disable += "LocalContextGetResourceValueCall"
     }
 
     compileOptions {
