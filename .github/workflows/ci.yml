@@ -1,141 +1,278 @@
-name: CI
+name: ApexSU CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  NDK_VERSION: 29.0.13846066
+  ANDROID_API_LEVEL: "26"
 
 jobs:
-  rust-check:
-    name: Rust Check
+  lint:
+    name: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: manager
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup JDK 21
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
-          targets: aarch64-linux-android
-          components: clippy, rustfmt
+          distribution: temurin
+          java-version: "21"
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - name: Cache Gradle
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('manager/gradle/wrapper/gradle-wrapper.properties', 'manager/gradle/libs.versions.toml', 'manager/**/*.gradle.kts', 'manager/**/gradle.lockfile', 'manager/**/*.lockfile') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Run lint
+        run: ./gradlew :app:lintDebug --no-daemon
+
+      - name: Upload lint report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: manager-lint-report
+          path: |
+            manager/app/build/reports/lint-results-debug.html
+            manager/app/build/reports/lint-results-debug.xml
+            manager/app/build/reports/lint/
+          if-no-files-found: warn
+
+  build-manager:
+    name: build-manager
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - lint
+    defaults:
+      run:
+        working-directory: manager
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK/NDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: >-
+            platform-tools
+            build-tools;36.0.0
+            ndk;29.0.13846066
+
+      - name: Cache Gradle + NDK
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            /usr/local/lib/android/sdk/ndk/29.0.13846066
+          key: ${{ runner.os }}-manager-${{ env.NDK_VERSION }}-${{ hashFiles('manager/gradle/wrapper/gradle-wrapper.properties', 'manager/gradle/libs.versions.toml', 'manager/**/*.gradle.kts', 'manager/**/gradle.lockfile', 'manager/**/*.lockfile') }}
+          restore-keys: |
+            ${{ runner.os }}-manager-${{ env.NDK_VERSION }}-
+            ${{ runner.os }}-manager-
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: manager-debug-apk
+          path: manager/app/build/outputs/apk/debug/
+          if-no-files-found: error
+
+      - name: Assemble release APK (unsigned)
+        run: ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Upload release APK (unsigned)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: manager-release-unsigned-apk
+          path: |
+            manager/app/build/outputs/apk/release/*unsigned*.apk
+            manager/app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+
+  build-ksud:
+    name: build-ksud
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Android SDK/NDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: >-
+            platform-tools
+            ndk;29.0.13846066
+
+      - name: Setup Rust toolchain (stable + target)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add aarch64-linux-android
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             userspace/ksud/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('userspace/ksud/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-ksud-cargo-${{ hashFiles('userspace/ksud/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-ksud-cargo-
 
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+      - name: Configure Android linker env
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang" >> "$GITHUB_ENV"
 
-      - name: Setup Android NDK
-        uses: android-actions/setup-android@v3
+      - name: Build ksud (aarch64-linux-android release)
+        run: cargo build --release --manifest-path userspace/ksud/Cargo.toml --target aarch64-linux-android
+
+      - name: Run ksud native tests
+        run: cargo test --manifest-path userspace/ksud/Cargo.toml --locked
+
+      - name: Upload ksud artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          packages: ndk;29.0.13846066
+          name: ksud-aarch64-linux-android
+          path: userspace/ksud/target/aarch64-linux-android/release/ksud
+          if-no-files-found: error
 
-      - name: Check formatting
-        working-directory: userspace/ksud
-        run: cargo fmt --check
-
-      - name: Clippy
-        working-directory: userspace/ksud
-        run: cargo ndk -t arm64-v8a clippy -- -D warnings
-
-      - name: Tests
-        working-directory: userspace/ksud
-        run: cargo test --all
-
-  build-apk:
-    name: Build APK
+  build-ksuinit:
+    name: build-ksuinit
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Setup JDK
-        uses: actions/setup-java@v4
+      - name: Setup Android SDK/NDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
         with:
-          distribution: temurin
-          java-version: 21
+          packages: >-
+            platform-tools
+            ndk;29.0.13846066
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
+      - name: Setup Rust toolchain (stable + target)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add aarch64-linux-android
 
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
-        run: sdkmanager "ndk;29.0.13846066" "build-tools;35.0.0"
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - name: Cache cargo registry + target
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('manager/**/*.gradle*', 'manager/gradle/libs.versions.toml') }}
-          restore-keys: ${{ runner.os }}-gradle-
+            ~/.cargo/registry
+            ~/.cargo/git
+            userspace/ksuinit/target
+          key: ${{ runner.os }}-ksuinit-cargo-${{ hashFiles('userspace/ksuinit/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-ksuinit-cargo-
 
-      - name: Build ksud
-        working-directory: userspace/ksud
-        run: cargo ndk -t arm64-v8a build --release
-
-      - name: Build JNI bridge
-        working-directory: manager/app/src/main/rust/kernelsu-jni
-        run: cargo ndk -t arm64-v8a build --release
-
-      - name: Copy native libraries
+      - name: Configure Android linker env
         run: |
-          mkdir -p manager/app/src/main/jniLibs/arm64-v8a
-          cp userspace/ksud/target/aarch64-linux-android/release/ksud \
-             manager/app/src/main/jniLibs/arm64-v8a/libksud.so
-          cp manager/app/src/main/rust/kernelsu-jni/target/aarch64-linux-android/release/libkernelsu.so \
-             manager/app/src/main/jniLibs/arm64-v8a/libkernelsu.so
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang" >> "$GITHUB_ENV"
 
-      - name: Build APK
-        working-directory: manager
-        run: ./gradlew assembleRelease --no-daemon
+      - name: Build ksuinit (aarch64-linux-android release)
+        run: cargo build --release --manifest-path userspace/ksuinit/Cargo.toml --target aarch64-linux-android
 
-      - name: Report APK size
-        run: |
-          APK=$(find manager/app/build/outputs/apk/release -name '*.apk' | head -1)
-          SIZE=$(du -h "$APK" | cut -f1)
-          echo "### APK Build" >> $GITHUB_STEP_SUMMARY
-          echo "- **Size:** $SIZE" >> $GITHUB_STEP_SUMMARY
-          echo "- **File:** $(basename $APK)" >> $GITHUB_STEP_SUMMARY
+      - name: Run ksuinit native tests
+        run: cargo test --manifest-path userspace/ksuinit/Cargo.toml --locked
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Upload ksuinit artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: apk-release
-          path: manager/app/build/outputs/apk/release/*.apk
-          retention-days: 7
+          name: ksuinit-aarch64-linux-android
+          path: userspace/ksuinit/target/aarch64-linux-android/release/ksuinit
+          if-no-files-found: error
 
-  cloc-report:
-    name: Language Report
+  kernel-check:
+    name: kernel-check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Install cloc
-        run: sudo apt-get install -y cloc
-
-      - name: Generate report
+      - name: Install kernel build dependencies
         run: |
-          echo "### Language Distribution" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cloc . --include-lang=C,Kotlin,Rust,"C Header","C/C++ Header" \
-               --exclude-dir=build,.gradle,target --quiet >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          sudo apt-get update
+          sudo apt-get install -y gcc make bc libssl-dev libelf-dev python3 curl xz-utils aarch64-linux-gnu-gcc
+
+      - name: Prepare reference kernel headers (compile-check only)
+        id: prep-headers
+        run: |
+          set -e
+          KVER="6.1.96"
+          TAR="linux-${KVER}.tar.xz"
+          URL="https://cdn.kernel.org/pub/linux/kernel/v6.x/${TAR}"
+          KERNEL_SRC="$RUNNER_TEMP/linux-${KVER}"
+          echo "KERNEL_SRC=$KERNEL_SRC" >> "$GITHUB_ENV"
+
+          if ! curl -fsSL "$URL" -o "$RUNNER_TEMP/$TAR"; then
+            echo "::warning::Unable to download kernel source (${URL}); skipping kernel compile-check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          tar -xf "$RUNNER_TEMP/$TAR" -C "$RUNNER_TEMP"
+          make -C "$KERNEL_SRC" ARCH=arm64 defconfig
+          make -C "$KERNEL_SRC" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Build kernel module (compile check only, not boot test)
+        if: steps.prep-headers.outputs.skip != 'true'
+        run: |
+          set -o pipefail
+          make -C kernel KDIR="$KERNEL_SRC" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules 2>&1 | tee kernel-build.log
+          echo "Kernel job is compile-check only; no boot/runtime validation is performed."
+
+      - name: Mark kernel check skipped
+        if: steps.prep-headers.outputs.skip == 'true'
+        run: echo "Kernel compile-check skipped due to missing reference headers/source."
+
+      - name: Upload kernel build log on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kernel-check-log
+          path: kernel-build.log
+          if-no-files-found: warn

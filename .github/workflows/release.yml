@@ -1,84 +1,142 @@
-name: Release
+name: ApexSU Release
+
 on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
-  id-token: write
-  attestations: write
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  NDK_VERSION: 29.0.13846066
+  ANDROID_API_LEVEL: "26"
 
 jobs:
-  build-manager:
-    uses: ./.github/workflows/build-manager.yml
-    secrets: inherit
-  release-readiness:
-    needs:
-      - build-manager
-    uses: ./.github/workflows/release-readiness.yml
-    secrets: inherit
-  release:
-    needs:
-      - build-manager
-      - release-readiness
+  release-build:
+    name: release-build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v7
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
 
-      - name: Rename ksud
+      - name: Setup JDK 21
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK/NDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: >-
+            platform-tools
+            build-tools;36.0.0
+            ndk;29.0.13846066
+
+      - name: Cache Gradle + Cargo + NDK
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.cargo/registry
+            ~/.cargo/git
+            userspace/ksud/target
+            userspace/ksuinit/target
+            /usr/local/lib/android/sdk/ndk/29.0.13846066
+          key: ${{ runner.os }}-release-${{ env.NDK_VERSION }}-${{ hashFiles('manager/gradle/wrapper/gradle-wrapper.properties', 'manager/gradle/libs.versions.toml', 'manager/**/*.gradle.kts', 'manager/**/gradle.lockfile', 'userspace/ksud/Cargo.lock', 'userspace/ksuinit/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-release-${{ env.NDK_VERSION }}-
+            ${{ runner.os }}-release-
+
+      - name: Setup Rust toolchain (stable + target)
         run: |
-          mkdir -p ksud
-          for dir in ./ksud-*; do
-              if [ -d "$dir" ]; then
-                 echo "----- Rename $dir -----"
-                 ksud_platform_name=$(basename "$dir")
-                 find "$dir" -type f -name "ksud" -path "*/release/*" | while read -r ksud_file; do
-                   if [ -f "$ksud_file" ]; then
-                     mv "$ksud_file" "ksud/$ksud_platform_name"
-                   fi
-                 done
-              fi
-          done
+          rustup toolchain install stable --profile minimal
+          rustup target add aarch64-linux-android
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang" >> "$GITHUB_ENV"
 
-      - name: Display structure of downloaded files
-        run: ls -R
+      - name: Build manager release APK
+        working-directory: manager
+        run: ./gradlew :app:assembleRelease --no-daemon
 
-      - name: Generate SHA256SUMS
+      - name: Build ksud release binary
+        run: cargo build --release --manifest-path userspace/ksud/Cargo.toml --target aarch64-linux-android
+
+      - name: Build ksuinit release binary
+        run: cargo build --release --manifest-path userspace/ksuinit/Cargo.toml --target aarch64-linux-android
+
+      - name: Decode signing keystore
         run: |
-          find manager android*-lkm ksud ksuinit -type f -print0 \
-            | sort -z \
-            | xargs -0 sha256sum > SHA256SUMS
-          test -s SHA256SUMS || { echo "SHA256SUMS generation failed"; exit 1; }
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.jks"
 
-      - name: Generate lightweight SBOM
+      - name: Sign APK with apksigner
         run: |
+          APK_UNSIGNED="$(find manager/app/build/outputs/apk/release -type f -name '*unsigned*.apk' | head -n 1)"
+          if [ -z "$APK_UNSIGNED" ]; then
+            APK_UNSIGNED="$(find manager/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
+          fi
+          test -n "$APK_UNSIGNED" || { echo "No release APK produced"; exit 1; }
+
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort | tail -n1)"
+          test -n "$APKSIGNER" || { echo "apksigner not found"; exit 1; }
+
+          APK_SIGNED="$RUNNER_TEMP/ApexSU-${GITHUB_REF_NAME}-signed.apk"
+
+          "$APKSIGNER" sign \
+            --ks "$RUNNER_TEMP/release.jks" \
+            --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+            --out "$APK_SIGNED" \
+            "$APK_UNSIGNED"
+
+          "$APKSIGNER" verify --verbose "$APK_SIGNED"
+          echo "APK_SIGNED=$APK_SIGNED" >> "$GITHUB_ENV"
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p dist
+          cp "$APK_SIGNED" "dist/ApexSU-${GITHUB_REF_NAME}.apk"
+          cp userspace/ksud/target/aarch64-linux-android/release/ksud "dist/ksud-aarch64-linux-android"
+          cp userspace/ksuinit/target/aarch64-linux-android/release/ksuinit "dist/ksuinit-aarch64-linux-android"
+
+      - name: Generate release notes from git log since previous tag
+        run: |
+          set -e
+          git fetch --tags --force
+          PREV_TAG="$(git tag --sort=-creatordate | grep -v "^${GITHUB_REF_NAME}$" | head -n 1 || true)"
           {
-            echo "{"
-            echo "  \"name\": \"ApexSU release artifacts\","
-            echo "  \"version\": \"${GITHUB_REF_NAME}\","
-            echo "  \"artifacts\": ["
-            find manager android*-lkm ksud ksuinit -type f | sed 's/.*/    {\"path\":\"&\"},/'
-            echo "    {\"path\":\"SHA256SUMS\"}"
-            echo "  ]"
-            echo "}"
-          } > RELEASE_SBOM.json
-          test -s RELEASE_SBOM.json || { echo "SBOM generation failed"; exit 1; }
+            echo "## Changes"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo "_Diff: ${PREV_TAG}..${GITHUB_REF_NAME}_"
+              echo
+              git log --pretty=format:"- %h %s" "${PREV_TAG}..HEAD"
+            else
+              echo "_First tagged release from this workflow_"
+              echo
+              git log --pretty=format:"- %h %s" HEAD
+            fi
+          } > RELEASE_NOTES.md
 
-      - name: Attest release checksums
-        uses: actions/attest-build-provenance@v2
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          subject-path: SHA256SUMS
-
-      - name: release
-        uses: softprops/action-gh-release@v2
-        with:
+          tag_name: ${{ github.ref_name }}
+          name: ApexSU ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
           files: |
-            manager/*.apk
-            android*-lkm/*_kernelsu.ko
-            ksud/ksud-*
-            ksuinit/**
-            SHA256SUMS
-            RELEASE_SBOM.json
+            dist/ApexSU-${{ github.ref_name }}.apk
+            dist/ksud-aarch64-linux-android
+            dist/ksuinit-aarch64-linux-android
