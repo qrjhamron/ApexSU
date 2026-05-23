@@ -7,7 +7,7 @@ use crate::{
     defs,
     utils::{self, umask},
 };
-use anyhow::{Context, Ok, Result, bail};
+use anyhow::{Context, Result, bail};
 use getopts::Options;
 use libc::c_int;
 use log::error;

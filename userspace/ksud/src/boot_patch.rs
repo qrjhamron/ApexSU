@@ -210,7 +210,7 @@ mod android {
             dd(&new_boot, &target_device).context("flash inactive boot failed")?;
 
             println!("- Swapping active slot to {target_slot}");
-            let status = Command::new(assets::BOOTCTL_PATH)
+            let status = Command::new(crate::assets::BOOTCTL_PATH)
                 .arg("set-active-boot-slot")
                 .arg(target_slot.to_string())
                 .status()
