@@ -159,7 +159,11 @@ jobs:
       - name: Configure Android linker env
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang" >> "$GITHUB_ENV"
+          LLVM_BIN="$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$LLVM_BIN/aarch64-linux-android${ANDROID_API_LEVEL}-clang" >> "$GITHUB_ENV"
+          echo "CC_aarch64_linux_android=$LLVM_BIN/aarch64-linux-android${ANDROID_API_LEVEL}-clang" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_linux_android=$LLVM_BIN/aarch64-linux-android${ANDROID_API_LEVEL}-clang++" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$LLVM_BIN/llvm-ar" >> "$GITHUB_ENV"
 
       - name: Build ksud (aarch64-linux-android release)
         run: cargo build --release --manifest-path userspace/ksud/Cargo.toml --target aarch64-linux-android
@@ -208,7 +212,11 @@ jobs:
       - name: Configure Android linker env
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang" >> "$GITHUB_ENV"
+          LLVM_BIN="$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$LLVM_BIN/aarch64-linux-android${ANDROID_API_LEVEL}-clang" >> "$GITHUB_ENV"
+          echo "CC_aarch64_linux_android=$LLVM_BIN/aarch64-linux-android${ANDROID_API_LEVEL}-clang" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_linux_android=$LLVM_BIN/aarch64-linux-android${ANDROID_API_LEVEL}-clang++" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$LLVM_BIN/llvm-ar" >> "$GITHUB_ENV"
 
       - name: Build ksuinit (aarch64-linux-android release)
         run: cargo build --release --manifest-path userspace/ksuinit/Cargo.toml --target aarch64-linux-android
@@ -235,7 +243,7 @@ jobs:
       - name: Install kernel build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc make bc libssl-dev libelf-dev python3 curl xz-utils aarch64-linux-gnu-gcc
+          sudo apt-get install -y gcc make bc libssl-dev libelf-dev python3 curl xz-utils gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
       - name: Prepare reference kernel headers (compile-check only)
         id: prep-headers
