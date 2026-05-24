@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Setup Android NDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: ndk;29.0.13846066
       - name: Export NDK path
@@ -45,6 +45,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Download release artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
       - name: Enforce release evidence
         run: scripts/release/check_release_readiness.sh
