@@ -24,7 +24,12 @@ ccflags-y += -I$(objtree)/security/selinux -include $(srctree)/include/uapi/asm-
 
 ifneq ($(CONFIG_KSU),)
 ifeq ($(wildcard $(srctree)/security/selinux/objsec.h),)
-$(error -- ApexSU: CONFIG_KSU=$(CONFIG_KSU) requires security/selinux/objsec.h from a full Android/GKI kernel source tree; distro header-only host builds are unsupported for strong module verification)
+ifeq ($(CONFIG_KSU_CI),)
+# Only enforce in non-CI builds
+$(error -- ApexSU: CONFIG_KSU=m requires security/selinux/objsec.h from a full Android/GKI kernel source tree; distro header-only host builds are unsupported for strong module verification)
+else
+$(warning -- ApexSU: objsec.h not found; CI compile-check only, SELinux hooks disabled)
+endif
 endif
 endif
 

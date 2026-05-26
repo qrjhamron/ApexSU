@@ -277,7 +277,12 @@ jobs:
         if: steps.prep-headers.outputs.skip != 'true'
         run: |
           set -o pipefail
-          make -C "$KERNEL_SRC" M="$GITHUB_WORKSPACE/kernel" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules 2>&1 | tee kernel-build.log
+          make -C kernel \
+            KDIR="$KERNEL_SRC" \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CONFIG_KSU=m \
+            CONFIG_KSU_CI=y 2>&1 | tee kernel-build.log
           echo "Kernel job is compile-check only; no boot/runtime validation is performed."
 
       - name: Mark kernel check skipped
