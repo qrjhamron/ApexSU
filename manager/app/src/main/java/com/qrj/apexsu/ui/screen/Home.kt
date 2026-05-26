@@ -3,9 +3,13 @@ package com.qrj.apexsu.ui.screen
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import android.system.Os
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -45,6 +49,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -64,6 +69,7 @@ import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.qrj.apexsu.KernelVersion
 import com.qrj.apexsu.Natives
@@ -82,6 +88,7 @@ import com.qrj.apexsu.ui.util.checkNewVersion
 import com.qrj.apexsu.ui.util.getModuleCount
 import com.qrj.apexsu.ui.util.getSELinuxStatus
 import com.qrj.apexsu.ui.util.getSuperuserCount
+import com.qrj.apexsu.ui.util.LkmSelection
 import com.qrj.apexsu.ui.util.module.LatestVersionInfo
 import com.qrj.apexsu.ui.util.reboot
 import com.qrj.apexsu.ui.util.rootAvailable
@@ -93,6 +100,7 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Link
@@ -109,6 +117,36 @@ fun HomePager(
     bottomInnerPadding: Dp
 ) {
     val kernelVersion = getKernelVersion()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val selectLkmLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val isKo = withContext(Dispatchers.IO) {
+                isKoFile(context, uri)
+            }
+            if (isKo) {
+                navigator.push(
+                    Route.Flash(
+                        FlashIt.FlashBoot(
+                            boot = null,
+                            lkm = LkmSelection.LkmUri(uri),
+                            ota = false,
+                            partition = null
+                        )
+                    )
+                )
+            } else {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.install_only_support_ko_file),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
     val scrollBehavior = MiuixScrollBehavior()
     val enableBlur = LocalEnableBlur.current
     val hazeState = remember { HazeState() }
@@ -121,7 +159,6 @@ fun HomePager(
         HazeStyle.Unspecified
     }
 
-    val context = LocalContext.current
     val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     val checkUpdate = prefs.getBoolean("check_update", true)
 
@@ -177,6 +214,9 @@ fun HomePager(
                         kernelVersion, ksuVersion, lkmMode,
                         onClickInstall = {
                             navigator.push(Route.Install)
+                        },
+                        onClickLoadLkm = {
+                            selectLkmLauncher.launch("*/*")
                         },
                         onClickSuperuser = {
                             mainState.animateToPage(1)
@@ -295,6 +335,7 @@ private fun StatusCard(
     ksuVersion: Int?,
     lkmMode: Boolean?,
     onClickInstall: () -> Unit = {},
+    onClickLoadLkm: () -> Unit = {},
     onClickSuperuser: () -> Unit = {},
     onclickModule: () -> Unit = {},
 ) {
@@ -466,38 +507,53 @@ private fun StatusCard(
             }
 
             kernelVersion.isGKI() -> {
-                val uriHandler = LocalUriHandler.current
-                val guideUrl = stringResource(R.string.home_learn_kernelsu_url)
                 Card(
-                    onClick = {
-                        onClickInstall()
-                    },
                     showIndication = true,
                     pressFeedbackType = PressFeedbackType.Sink
                 ) {
-                    BasicComponent(
-                        title = stringResource(R.string.home_kernel_not_detected_title),
-                        summary = stringResource(R.string.home_kernel_not_detected_body),
-                        startAction = {
-                            Icon(
-                                Icons.Rounded.ErrorOutline,
-                                stringResource(R.string.home_kernel_not_detected_title),
-                                modifier = Modifier
-                                    .padding(end = 16.dp),
-                                tint = colorScheme.onBackground,
-                            )
-                        },
-                        endActions = {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Icon(
+                            Icons.Rounded.ErrorOutline,
+                            stringResource(R.string.home_kernel_module_not_found_title),
+                            modifier = Modifier.size(28.dp),
+                            tint = colorScheme.onBackground,
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
                             Text(
-                                text = stringResource(R.string.learn_more),
-                                color = colorScheme.primary,
-                                fontWeight = FontWeight.Medium,
+                                text = stringResource(R.string.home_kernel_module_not_found_title),
+                                fontWeight = FontWeight.SemiBold,
+                                color = colorScheme.onSurface,
                             )
-                        },
-                        onClick = {
-                            uriHandler.openUri(guideUrl)
+                            Text(
+                                text = stringResource(R.string.home_kernel_module_not_found_body),
+                                color = colorScheme.onSurfaceVariantSummary,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                TextButton(
+                                    text = stringResource(R.string.home_patch_boot_image),
+                                    onClick = onClickInstall,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(
+                                    text = stringResource(R.string.home_load_lkm_manually),
+                                    onClick = onClickLoadLkm,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
                         }
-                    )
+                    }
                 }
             }
 
@@ -758,6 +814,30 @@ private fun copyToClipboard(context: Context, label: String, text: String) {
         context.getString(R.string.copied_to_clipboard, label),
         Toast.LENGTH_SHORT
     ).show()
+}
+
+private fun isKoFile(context: Context, uri: Uri): Boolean {
+    val segment = uri.lastPathSegment ?: ""
+    if (segment.endsWith(".ko", ignoreCase = true)) return true
+
+    return try {
+        context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index != -1 && cursor.moveToFirst()) {
+                cursor.getString(index)?.endsWith(".ko", ignoreCase = true) == true
+            } else {
+                false
+            }
+        } ?: false
+    } catch (_: Throwable) {
+        false
+    }
 }
 
 fun getManagerVersion(context: Context): Pair<String, Long> {

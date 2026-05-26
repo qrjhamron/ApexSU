@@ -1,9 +1,11 @@
 package com.qrj.apexsu.ui.screen
 
+import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.os.Parcelable
 import android.os.SystemClock
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.BasicText
@@ -91,6 +93,7 @@ import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import java.io.File
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -161,18 +164,44 @@ fun FlashScreen(
         onConfirm = { confirmed = true },
         onDismiss = { navigator.pop() }
     )
-    val flashTarget = when (flashIt) {
-        is FlashIt.FlashBoot -> stringResource(if (flashIt.ota) R.string.flash_target_inactive_slot else R.string.flash_target_current_slot)
-        is FlashIt.FlashModules -> stringResource(R.string.module)
-        FlashIt.FlashRestore -> stringResource(R.string.settings_restore_stock_image)
-        FlashIt.FlashUninstall -> stringResource(R.string.settings_uninstall)
-    }
     val backupStatus = if (flashIt is FlashIt.FlashBoot) {
         stringResource(R.string.flash_backup_required)
     } else {
         stringResource(R.string.flash_backup_not_required)
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(flashIt) {
+        val flashTarget = when (flashIt) {
+            is FlashIt.FlashBoot -> {
+                val slotTarget = context.getString(
+                    if (flashIt.ota) R.string.flash_target_inactive_slot else R.string.flash_target_current_slot
+                )
+                flashIt.boot?.let { bootUri ->
+                    val details = withContext(Dispatchers.IO) {
+                        readBootImageDetails(context, bootUri)
+                    }
+                    buildString {
+                        append(context.getString(R.string.flash_custom_boot_image, details.displayName))
+                        append("\n")
+                        append(context.getString(R.string.install_file_size))
+                        append(": ")
+                        append(details.sizeBytes?.let(::formatFileSize) ?: context.getString(R.string.install_file_unavailable))
+                        append("\n")
+                        append(context.getString(R.string.install_file_sha256))
+                        append(": ")
+                        append(details.sha256 ?: context.getString(R.string.install_file_unavailable))
+                        append("\n")
+                        append(slotTarget)
+                    }
+                } ?: context.getString(
+                    R.string.flash_auto_detected_boot_partition,
+                    flashIt.partition ?: context.getString(R.string.flash_auto_detected_boot_partition_default)
+                )
+            }
+
+            is FlashIt.FlashModules -> context.getString(R.string.module)
+            FlashIt.FlashRestore -> context.getString(R.string.settings_restore_stock_image)
+            FlashIt.FlashUninstall -> context.getString(R.string.settings_uninstall)
+        }
         confirmDialog.showConfirm(
             title = context.getString(R.string.flash_confirm_title),
             content = context.getString(
@@ -398,6 +427,74 @@ fun flashIt(
         FlashIt.FlashRestore -> restoreBoot(onStdout, onStderr)
 
         FlashIt.FlashUninstall -> uninstallPermanently(onStdout, onStderr)
+    }
+}
+
+private data class BootImageDetails(
+    val displayName: String,
+    val sizeBytes: Long?,
+    val sha256: String?
+)
+
+private fun readBootImageDetails(context: Context, uri: Uri): BootImageDetails {
+    val metadata = queryUriMetadata(context, uri)
+    return BootImageDetails(
+        displayName = metadata.first ?: uri.toString(),
+        sizeBytes = metadata.second,
+        sha256 = computeSha256(context, uri)
+    )
+}
+
+private fun queryUriMetadata(context: Context, uri: Uri): Pair<String?, Long?> {
+    return try {
+        context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            val name = if (nameIndex != -1) cursor.getString(nameIndex) else null
+            val size = if (sizeIndex != -1 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else null
+            name to size
+        } ?: (null to null)
+    } catch (_: Throwable) {
+        null to null
+    }
+}
+
+private fun computeSha256(context: Context, uri: Uri): String? {
+    return try {
+        val digest = MessageDigest.getInstance("SHA-256")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                digest.update(buffer, 0, read)
+            }
+        } ?: return null
+        digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+private fun formatFileSize(sizeBytes: Long): String {
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var size = sizeBytes.toDouble()
+    var unit = 0
+    while (size >= 1024 && unit < units.lastIndex) {
+        size /= 1024
+        unit++
+    }
+    return if (unit == 0) {
+        "$sizeBytes ${units[unit]}"
+    } else {
+        String.format(Locale.US, "%.1f %s", size, units[unit])
     }
 }
 

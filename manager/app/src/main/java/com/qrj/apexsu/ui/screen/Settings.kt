@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -145,6 +146,7 @@ fun SettingPager(
 
         val loadingDialog = rememberLoadingDialog()
         val scope = rememberCoroutineScope()
+        val uriHandler = LocalUriHandler.current
         val showScaleDialog = rememberSaveable { mutableStateOf(false) }
         val showUninstallDialog = rememberSaveable { mutableStateOf(false) }
         val showSendLogDialog = rememberSaveable { mutableStateOf(false) }
@@ -761,9 +763,18 @@ fun SettingPager(
                         .padding(vertical = 12.dp)
                         .fillMaxWidth(),
                 ) {
+                    val kernelModuleVersion = if (Natives.isManager) {
+                        Natives.version.toString()
+                    } else {
+                        stringResource(R.string.settings_about_kernel_module_not_detected)
+                    }
                     SuperArrow(
                         title = stringResource(id = R.string.settings_about_version),
-                        summary = BuildConfig.VERSION_NAME,
+                        summary = stringResource(
+                            R.string.settings_about_version_summary,
+                            BuildConfig.VERSION_NAME,
+                            kernelModuleVersion
+                        ),
                         startAction = {
                             Icon(
                                 Icons.Rounded.Info,
@@ -772,6 +783,36 @@ fun SettingPager(
                                 tint = colorScheme.onBackground
                             )
                         },
+                    )
+                    SuperArrow(
+                        title = stringResource(R.string.settings_check_update),
+                        summary = "github.com/qrjhamron/ApexSU/releases",
+                        startAction = {
+                            Icon(
+                                Icons.Rounded.Update,
+                                modifier = Modifier.padding(end = 6.dp),
+                                contentDescription = stringResource(R.string.settings_check_update),
+                                tint = colorScheme.onBackground
+                            )
+                        },
+                        onClick = {
+                            uriHandler.openUri("https://github.com/qrjhamron/ApexSU/releases")
+                        }
+                    )
+                    SuperArrow(
+                        title = stringResource(R.string.settings_report_bug),
+                        summary = "github.com/qrjhamron/ApexSU/issues/new",
+                        startAction = {
+                            Icon(
+                                Icons.Rounded.BugReport,
+                                modifier = Modifier.padding(end = 6.dp),
+                                contentDescription = stringResource(R.string.settings_report_bug),
+                                tint = colorScheme.onBackground
+                            )
+                        },
+                        onClick = {
+                            uriHandler.openUri("https://github.com/qrjhamron/ApexSU/issues/new")
+                        }
                     )
                     SuperArrow(
                         title = stringResource(id = R.string.settings_about_build),
@@ -784,6 +825,9 @@ fun SettingPager(
                     SuperArrow(
                         title = stringResource(id = R.string.settings_about_github),
                         summary = "github.com/qrjhamron/ApexSU",
+                        onClick = {
+                            uriHandler.openUri("https://github.com/qrjhamron/ApexSU")
+                        }
                     )
                     val about = stringResource(id = R.string.about)
                     SuperArrow(

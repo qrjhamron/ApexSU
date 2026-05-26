@@ -2,6 +2,8 @@ package com.qrj.apexsu.ui.screen
 
 import android.annotation.SuppressLint
 import android.app.Activity.RESULT_OK
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -166,6 +168,13 @@ private enum class ShortcutType {
     WebUI
 }
 
+private data class ActionableModuleError(
+    val title: String,
+    val firstLine: String,
+    val secondLine: String,
+    val log: String,
+)
+
 @SuppressLint("StringFormatInvalid", "LocalContextGetResourceValueCall")
 @Composable
 fun ModulePager(
@@ -214,6 +223,8 @@ fun ModulePager(
 
     val loadingDialog = rememberLoadingDialog()
     val confirmDialog = rememberConfirmDialog()
+    val showModuleErrorDialog = remember { mutableStateOf(false) }
+    var moduleError by remember { mutableStateOf<ActionableModuleError?>(null) }
 
     val isSafeMode = Natives.isSafeMode
     val magiskInstalled by produceState(initialValue = false) {
@@ -228,11 +239,7 @@ fun ModulePager(
         derivedStateOf { 12.dp * (1f - scrollBehavior.state.collapsedFraction) }
     }
 
-    val failedEnable = stringResource(R.string.module_failed_to_enable)
-    val failedDisable = stringResource(R.string.module_failed_to_disable)
-    val failedUndoUninstall = stringResource(R.string.module_undo_uninstall_failed)
     val successUndoUninstall = stringResource(R.string.module_undo_uninstall_success)
-    val failedUninstall = stringResource(R.string.module_uninstall_failed)
     val successUninstall = stringResource(R.string.module_uninstall_success)
     val rebootToApply = stringResource(R.string.reboot_to_apply)
     val moduleStr = stringResource(R.string.module)
@@ -244,6 +251,21 @@ fun ModulePager(
     val changelogText = stringResource(R.string.module_changelog)
     val downloadingText = stringResource(R.string.module_downloading)
     val startDownloadingText = stringResource(R.string.module_start_downloading)
+
+    fun showModuleFailure(
+        title: String,
+        firstLine: String,
+        secondLine: String,
+        log: String,
+    ) {
+        moduleError = ActionableModuleError(
+            title = title,
+            firstLine = firstLine,
+            secondLine = secondLine,
+            log = log,
+        )
+        showModuleErrorDialog.value = true
+    }
 
     var shortcutModuleId by rememberSaveable { mutableStateOf<String?>(null) }
     var shortcutName by rememberSaveable { mutableStateOf("") }
@@ -402,6 +424,16 @@ fun ModulePager(
             return
         }
 
+        if (downloadUrl.isBlank()) {
+            showModuleFailure(
+                title = context.getString(R.string.module_error_install_title),
+                firstLine = context.getString(R.string.module_error_install_no_url_line1, module.name),
+                secondLine = context.getString(R.string.module_error_install_no_url_line2),
+                log = "operation=module_update_install\nmodule_id=${module.id}\nmodule_name=${module.name}\ndownload_url=<blank>",
+            )
+            return
+        }
+
         showToast(startDownloadingText.format(module.name))
 
         val downloading = downloadingText.format(module.name)
@@ -430,12 +462,16 @@ fun ModulePager(
         if (success) {
             viewModel.fetchModuleList()
         }
-        val message = if (success) {
-            successUndoUninstall.format(module.name)
+        if (success) {
+            Toast.makeText(context, successUndoUninstall.format(module.name), Toast.LENGTH_SHORT).show()
         } else {
-            failedUndoUninstall.format(module.name)
+            showModuleFailure(
+                title = context.getString(R.string.module_error_restore_title),
+                firstLine = context.getString(R.string.module_error_restore_line1, module.name),
+                secondLine = context.getString(R.string.module_error_restore_line2),
+                log = "operation=module_undo_uninstall\nmodule_id=${module.id}\nmodule_name=${module.name}",
+            )
         }
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 
     suspend fun onModuleUninstall(module: ModuleViewModel.ModuleInfo) {
@@ -459,12 +495,16 @@ fun ModulePager(
         if (success) {
             viewModel.fetchModuleList()
         }
-        val message = if (success) {
-            successUninstall.format(module.name)
+        if (success) {
+            Toast.makeText(context, successUninstall.format(module.name), Toast.LENGTH_SHORT).show()
         } else {
-            failedUninstall.format(module.name)
+            showModuleFailure(
+                title = context.getString(R.string.module_error_uninstall_title),
+                firstLine = context.getString(R.string.module_error_uninstall_line1, module.name),
+                secondLine = context.getString(R.string.module_error_uninstall_line2),
+                log = "operation=module_uninstall\nmodule_id=${module.id}\nmodule_name=${module.name}",
+            )
         }
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 
     suspend fun onModuleToggle(module: ModuleViewModel.ModuleInfo) {
@@ -477,8 +517,16 @@ fun ModulePager(
             viewModel.fetchModuleList()
             Toast.makeText(context, rebootToApply, Toast.LENGTH_SHORT).show()
         } else {
-            val message = if (module.enabled) failedDisable else failedEnable
-            Toast.makeText(context, message.format(module.name), Toast.LENGTH_SHORT).show()
+            val action = if (module.enabled) "disable" else "enable"
+            val title = context.getString(
+                if (module.enabled) R.string.module_error_disable_title else R.string.module_error_enable_title
+            )
+            showModuleFailure(
+                title = title,
+                firstLine = context.getString(R.string.module_error_toggle_line1, action, module.name),
+                secondLine = context.getString(R.string.module_error_toggle_line2),
+                log = "operation=module_toggle\nmodule_id=${module.id}\nmodule_name=${module.name}\ntarget_enabled=${!module.enabled}",
+            )
         }
     }
 
@@ -1052,6 +1100,58 @@ fun ModulePager(
             }
         }
     }
+    if (showModuleErrorDialog.value && moduleError != null) {
+        val error = moduleError!!
+        SuperDialog(
+            show = showModuleErrorDialog,
+            title = error.title,
+            onDismissRequest = {
+                showModuleErrorDialog.value = false
+                moduleError = null
+            }
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = error.firstLine,
+                    color = colorScheme.onSurface,
+                )
+                Text(
+                    text = error.secondLine,
+                    color = colorScheme.onSurfaceVariantSummary,
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    TextButton(
+                        text = stringResource(R.string.copy_log),
+                        onClick = {
+                            copyModuleErrorLog(context, error.log)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        text = stringResource(id = android.R.string.ok),
+                        onClick = {
+                            showModuleErrorDialog.value = false
+                            moduleError = null
+                        },
+                        colors = ButtonDefaults.textButtonColorsPrimary(),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun copyModuleErrorLog(context: Context, log: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val label = context.getString(R.string.module_error_log_label)
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, log))
+    Toast.makeText(context, context.getString(R.string.copied_to_clipboard, label), Toast.LENGTH_SHORT).show()
 }
 
 @Composable

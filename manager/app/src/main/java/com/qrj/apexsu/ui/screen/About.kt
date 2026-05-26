@@ -90,7 +90,7 @@ fun AboutScreen() {
     val htmlString = stringResource(
         id = R.string.about_source_code,
         "<b><a href=\"https://github.com/qrjhamron/ApexSU\">GitHub</a></b>",
-        "<b><a href=\"https://kernelsu.org\">KernelSU</a></b>"
+        "<b><a href=\"https://github.com/qrjhamron/ApexSU\">ApexSU</a></b>"
     )
     val result = extractLinks(htmlString)
 
@@ -284,7 +284,7 @@ fun AboutScreen() {
                             )
                         },
                         onClick = {
-                            uriHandler.openUri("https://kernelsu.org/guide/installation.html")
+                            uriHandler.openUri("https://github.com/qrjhamron/ApexSU#readme")
                         }
                     )
                 }
@@ -307,7 +307,7 @@ fun AboutScreen() {
                             )
                         },
                         onClick = {
-                            uriHandler.openUri("https://github.com/tiann/KernelSU")
+                            uriHandler.openUri("https://github.com/qrjhamron/ApexSU")
                         }
                     )
                 }

@@ -1,9 +1,7 @@
 package com.qrj.apexsu.ui.screen
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.widget.Toast
@@ -34,11 +32,13 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +58,9 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.qrj.apexsu.R
 import com.qrj.apexsu.getKernelVersion
 import com.qrj.apexsu.ui.component.ChooseKmiDialog
@@ -79,18 +82,19 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.extra.SuperCheckbox
 import top.yukonga.miuix.kmp.extra.SuperDropdown
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.ConvertFile
-import top.yukonga.miuix.kmp.icon.extended.MoveFile
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * @author weishu
@@ -102,12 +106,58 @@ fun InstallScreen() {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val enableBlur = LocalEnableBlur.current
+    val scope = rememberCoroutineScope()
     var installMethod by remember {
         mutableStateOf<InstallMethod?>(null)
     }
 
-    var lkmSelection by remember {
+    var selectedBootUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedBootUri = selectedBootUriString?.let(Uri::parse)
+    val selectedBootDetails by produceState<SelectedBootImageDetails?>(
+        initialValue = null,
+        key1 = selectedBootUriString
+    ) {
+        value = null
+        val uri = selectedBootUriString?.let(Uri::parse) ?: return@produceState
+        value = withContext(Dispatchers.IO) {
+            readBootImageDetails(context, uri)
+        }
+    }
+
+    var lkmSelection by rememberSaveable {
         mutableStateOf<LkmSelection>(LkmSelection.KmiNone)
+    }
+    val selectedLkmUriString = (lkmSelection as? LkmSelection.LkmUri)?.uri?.toString()
+    val selectedLkmLabel by produceState<String?>(
+        initialValue = null,
+        key1 = selectedLkmUriString
+    ) {
+        value = null
+        val uri = selectedLkmUriString?.let(Uri::parse) ?: return@produceState
+        value = withContext(Dispatchers.IO) {
+            getUriDisplayLabel(context, uri)
+        }
+    }
+    LaunchedEffect(selectedBootUriString) {
+        val uri = selectedBootUriString?.let(Uri::parse)
+        if (uri != null && installMethod == null) {
+            installMethod = InstallMethod.SelectFile(uri = uri, summary = null)
+        }
+    }
+
+    val hasRoot = rootAvailable()
+    val abDevice = produceState(initialValue = false) {
+        value = isAbDevice()
+    }.value
+    val gkiDevice = produceState(initialValue = false) {
+        value = getKernelVersion().isGKI()
+    }.value
+    val directInstallMethods = mutableListOf<InstallMethod>()
+    if (hasRoot && gkiDevice) {
+        directInstallMethods.add(InstallMethod.DirectInstall)
+        if (abDevice) {
+            directInstallMethods.add(InstallMethod.DirectInstallToInactiveSlot)
+        }
     }
 
     var partitionSelectionIndex by remember { mutableIntStateOf(0) }
@@ -151,30 +201,35 @@ fun InstallScreen() {
         }
     }
 
+    val selectBootLauncher =
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            selectedBootUriString = uri.toString()
+            installMethod = InstallMethod.SelectFile(uri = uri, summary = null)
+        }
+
     val selectLkmLauncher =
-        rememberLauncherForActivityResult(contract = ActivityResultContracts.StartActivityForResult()) {
-            if (it.resultCode == Activity.RESULT_OK) {
-                it.data?.data?.let { uri ->
-                    val isKo = isKoFile(context, uri)
-                    if (isKo) {
-                        lkmSelection = LkmSelection.LkmUri(uri)
-                    } else {
-                        lkmSelection = LkmSelection.KmiNone
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.install_only_support_ko_file),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                val isKo = withContext(Dispatchers.IO) {
+                    isKoFile(context, uri)
+                }
+                if (isKo) {
+                    lkmSelection = LkmSelection.LkmUri(uri)
+                } else {
+                    lkmSelection = LkmSelection.KmiNone
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.install_only_support_ko_file),
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
 
-    val onLkmUpload = {
-        selectLkmLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "application/octet-stream"
-        })
-    }
+    val onBootUpload = { selectBootLauncher.launch("*/*") }
+    val onLkmUpload = { selectLkmLauncher.launch("*/*") }
 
     val scrollBehavior = MiuixScrollBehavior()
     val hazeState = remember { HazeState() }
@@ -213,12 +268,69 @@ fun InstallScreen() {
             overscrollEffect = null,
         ) {
             item {
+                if (directInstallMethods.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                    ) {
+                        SelectInstallMethod(
+                            options = directInstallMethods,
+                            selectedOption = installMethod,
+                            onSelected = { method ->
+                                installMethod = method
+                            }
+                        )
+                    }
+                }
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
                 ) {
-                    SelectInstallMethod { method ->
-                        installMethod = method
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.install_patch_local_boot_image),
+                            color = colorScheme.onSurface
+                        )
+                        TextButton(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            text = stringResource(R.string.install_select_boot_image),
+                            colors = ButtonDefaults.textButtonColorsPrimary(),
+                            onClick = onBootUpload
+                        )
+                        val bootDetailsText = selectedBootDetails?.let { details ->
+                            buildString {
+                                append(details.displayName)
+                                append("\n")
+                                append(stringResource(R.string.install_file_size))
+                                append(": ")
+                                append(details.sizeBytes?.let(::formatFileSize) ?: stringResource(R.string.install_file_unavailable))
+                                append("\n")
+                                append(stringResource(R.string.install_file_sha256))
+                                append(": ")
+                                append(details.sha256 ?: stringResource(R.string.install_file_unavailable))
+                            }
+                        } ?: selectedBootUri?.let {
+                            stringResource(R.string.install_reading_file_details)
+                        }
+                        if (bootDetailsText != null) {
+                            Text(
+                                modifier = Modifier.padding(top = 8.dp),
+                                text = stringResource(R.string.install_boot_step_indicator),
+                                color = colorScheme.primary
+                            )
+                            Text(
+                                modifier = Modifier.padding(top = 8.dp),
+                                text = bootDetailsText,
+                                color = colorScheme.onSurfaceVariantSummary
+                            )
+                        }
                     }
                 }
                 AnimatedVisibility(
@@ -271,24 +383,36 @@ fun InstallScreen() {
                         .fillMaxWidth()
                         .padding(top = 12.dp),
                 ) {
-                    SuperArrow(
-                        title = stringResource(id = R.string.install_upload_lkm_file),
-                        summary = (lkmSelection as? LkmSelection.LkmUri)?.let {
-                            stringResource(
-                                id = R.string.selected_lkm,
-                                it.uri.lastPathSegment ?: "(file)"
-                            )
-                        },
-                        onClick = onLkmUpload,
-                        startAction = {
-                            Icon(
-                                MiuixIcons.MoveFile,
-                                tint = colorScheme.onSurface,
-                                modifier = Modifier.padding(end = 16.dp),
-                                contentDescription = null
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.install_load_lkm_manually),
+                            color = colorScheme.onSurface
+                        )
+                        TextButton(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            text = stringResource(R.string.install_select_lkm_file),
+                            colors = ButtonDefaults.textButtonColorsPrimary(),
+                            onClick = onLkmUpload
+                        )
+                        val lkmDetailsText = when {
+                            selectedLkmLabel != null -> selectedLkmLabel
+                            selectedLkmUriString != null -> stringResource(R.string.install_reading_selected_file)
+                            else -> null
+                        }
+                        if (lkmDetailsText != null) {
+                            Text(
+                                modifier = Modifier.padding(top = 8.dp),
+                                text = lkmDetailsText,
+                                color = colorScheme.onSurfaceVariantSummary
                             )
                         }
-                    )
+                    }
                 }
                 TextButton(
                     modifier = Modifier
@@ -332,46 +456,13 @@ sealed class InstallMethod {
 }
 
 @Composable
-private fun SelectInstallMethod(onSelected: (InstallMethod) -> Unit = {}) {
-    val rootAvailable = rootAvailable()
-    val isAbDevice = produceState(initialValue = false) {
-        value = isAbDevice()
-    }.value
-    val defaultPartitionName = produceState(initialValue = "boot") {
-        value = getDefaultPartition()
-    }.value
-    val isGkiDevice = produceState(initialValue = false) {
-        value = getKernelVersion().isGKI()
-    }.value
-    val selectFileTip = stringResource(
-        id = R.string.select_file_tip, defaultPartitionName
-    )
-    val selectFileTipNoGKI = stringResource(id = R.string.select_file_tip_nogki)
-    val radioOptions = mutableListOf<InstallMethod>(InstallMethod.SelectFile(summary = if (isGkiDevice) selectFileTip else selectFileTipNoGKI))
-    if (rootAvailable && isGkiDevice) {
-        radioOptions.add(InstallMethod.DirectInstall)
-
-        if (isAbDevice) {
-            radioOptions.add(InstallMethod.DirectInstallToInactiveSlot)
-        }
-    }
-
-    var selectedOption by remember { mutableStateOf<InstallMethod?>(null) }
-    val selectImageLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) {
-        if (it.resultCode == Activity.RESULT_OK) {
-            it.data?.data?.let { uri ->
-                val option = InstallMethod.SelectFile(uri, summary = selectFileTip)
-                selectedOption = option
-                onSelected(option)
-            }
-        }
-    }
-
+private fun SelectInstallMethod(
+    options: List<InstallMethod>,
+    selectedOption: InstallMethod?,
+    onSelected: (InstallMethod) -> Unit = {}
+) {
     val confirmDialog = rememberConfirmDialog(
         onConfirm = {
-            selectedOption = InstallMethod.DirectInstallToInactiveSlot
             onSelected(InstallMethod.DirectInstallToInactiveSlot)
         }
     )
@@ -381,25 +472,20 @@ private fun SelectInstallMethod(onSelected: (InstallMethod) -> Unit = {}) {
     val onClick = { option: InstallMethod ->
 
         when (option) {
-            is InstallMethod.SelectFile -> {
-                selectImageLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "application/octet-stream"
-                })
-            }
-
             is InstallMethod.DirectInstall -> {
-                selectedOption = option
                 onSelected(option)
             }
 
             is InstallMethod.DirectInstallToInactiveSlot -> {
                 confirmDialog.showConfirm(dialogTitle, dialogContent)
             }
+
+            is InstallMethod.SelectFile -> Unit
         }
     }
 
     Column {
-        radioOptions.forEach { option ->
+        options.forEach { option ->
             val interactionSource = remember { MutableInteractionSource() }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -425,6 +511,78 @@ private fun SelectInstallMethod(onSelected: (InstallMethod) -> Unit = {}) {
                 )
             }
         }
+    }
+}
+
+private data class SelectedBootImageDetails(
+    val displayName: String,
+    val sizeBytes: Long?,
+    val sha256: String?
+)
+
+private fun readBootImageDetails(context: Context, uri: Uri): SelectedBootImageDetails {
+    val metadata = queryUriMetadata(context, uri)
+    return SelectedBootImageDetails(
+        displayName = metadata.first ?: uri.toString(),
+        sizeBytes = metadata.second,
+        sha256 = computeSha256(context, uri)
+    )
+}
+
+private fun getUriDisplayLabel(context: Context, uri: Uri): String {
+    return queryUriMetadata(context, uri).first ?: uri.toString()
+}
+
+private fun queryUriMetadata(context: Context, uri: Uri): Pair<String?, Long?> {
+    return try {
+        context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            val name = if (nameIndex != -1) cursor.getString(nameIndex) else null
+            val size = if (sizeIndex != -1 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else null
+            name to size
+        } ?: (null to null)
+    } catch (_: Throwable) {
+        null to null
+    }
+}
+
+private fun computeSha256(context: Context, uri: Uri): String? {
+    return try {
+        val digest = MessageDigest.getInstance("SHA-256")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                digest.update(buffer, 0, read)
+            }
+        } ?: return null
+        digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+private fun formatFileSize(sizeBytes: Long): String {
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var size = sizeBytes.toDouble()
+    var unit = 0
+    while (size >= 1024 && unit < units.lastIndex) {
+        size /= 1024
+        unit++
+    }
+    return if (unit == 0) {
+        "${sizeBytes} ${units[unit]}"
+    } else {
+        String.format(Locale.US, "%.1f %s", size, units[unit])
     }
 }
 
