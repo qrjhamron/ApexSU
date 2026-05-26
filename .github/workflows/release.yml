@@ -38,8 +38,8 @@ jobs:
             python3 \
             curl \
             xz-utils \
-            aarch64-linux-gnu-gcc \
-            aarch64-linux-gnu-binutils
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
 
       - name: Download GKI 6.1 kernel source
         run: |
