@@ -47,6 +47,9 @@ jobs:
           curl -fsSL https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1.tar.gz -o "$RUNNER_TEMP/android14-6.1.tar.gz"
           mkdir -p "$RUNNER_TEMP/kernel-src"
           tar -xzf "$RUNNER_TEMP/android14-6.1.tar.gz" -C "$RUNNER_TEMP/kernel-src"
+          if [ ! -f "$RUNNER_TEMP/kernel-src/security/selinux/objsec.h" ] && [ -f "$RUNNER_TEMP/kernel-src/security/selinux/include/objsec.h" ]; then
+            ln -sf include/objsec.h "$RUNNER_TEMP/kernel-src/security/selinux/objsec.h"
+          fi
           echo "KERNEL_SRC=$RUNNER_TEMP/kernel-src" >> "$GITHUB_ENV"
 
       - name: Prepare kernel build tree
