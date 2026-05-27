@@ -195,7 +195,6 @@ fun HomePager(
             }
         }
     }
-    val scrollBehavior = MiuixScrollBehavior()
     val enableBlur = LocalEnableBlur.current
     val hazeState = remember { HazeState() }
     val hazeStyle = if (enableBlur) {
@@ -233,7 +232,6 @@ fun HomePager(
                     .fillMaxSize()
                     .scrollEndHaptic()
                     .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
                     .padding(horizontal = 12.dp)
                     .let { if (enableBlur) it.hazeSource(state = hazeState) else it },
                 contentPadding = innerPadding,

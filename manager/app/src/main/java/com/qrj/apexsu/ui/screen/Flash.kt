@@ -372,25 +372,6 @@ fun FlashScreen(
                     text = stringResource(R.string.patch_success_output, outputPath),
                     color = colorScheme.onSurfaceVariantSummary,
                 )
-                TextButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    text = stringResource(R.string.flash_patched_image),
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
-                    onClick = {
-                        navigator.push(
-                            com.qrj.apexsu.ui.navigation3.Route.Flash(
-                                FlashIt.FlashPatchedBoot(
-                                    patchedBootPath = outputPath,
-                                    originalBootPath = flashIt.boot.toString(),
-                                    ota = false,
-                                    partition = null
-                                )
-                            )
-                        )
-                    }
-                )
             }
             Spacer(
                 Modifier.height(
