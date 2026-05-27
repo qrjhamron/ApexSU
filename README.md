@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="website/docs/public/logo.png" alt="ApexSU Logo" width="140" />
+  <img src="manager/app/src/main/assets/logo/apexsu_logo.svg" alt="ApexSU Logo" width="140" />
 </p>
 
 <h1 align="center">ApexSU</h1>
@@ -7,6 +7,9 @@
 <p align="center">
   <a href="https://github.com/qrjhamron/ApexSU/releases">
     <img src="https://img.shields.io/github/v/release/qrjhamron/ApexSU?display_name=tag&sort=semver" alt="GitHub Release" />
+  </a>
+  <a href="https://github.com/qrjhamron/ApexSU/stargazers">
+    <img src="https://img.shields.io/github/stars/qrjhamron/ApexSU?style=flat" alt="GitHub Stars" />
   </a>
   <a href="https://github.com/qrjhamron/ApexSU/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/qrjhamron/ApexSU/ci.yml?branch=main&label=CI" alt="CI Status" />
