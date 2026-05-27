@@ -320,4 +320,12 @@
     <string name="module_error_disable_title">Couldn\'t disable module</string>
     <string name="module_error_toggle_line1">ApexSU could not %1$s %2$s.</string>
     <string name="module_error_toggle_line2">Verify root access, then reboot and try the toggle again.</string>
+    <string name="home_not_installed_id">Tidak terpasang</string>
+    <string name="home_tap_to_install_id">Ketuk untuk memasang</string>
+    <string name="home_pick_boot_image_id">Pilih berkas boot.img</string>
+    <string name="home_pick_boot_image_sub_id">Pilih boot image untuk di-patch</string>
+    <string name="home_use_local_lkm_id">Gunakan LKM lokal</string>
+    <string name="home_auto_pick_ko_id">Otomatis pilih .ko sesuai kernel</string>
+    <string name="home_device_maybe_unsupported_gki_id">Perangkat mungkin tidak didukung GKI</string>
+    <string name="home_installed_id">Terpasang</string>
 </resources>

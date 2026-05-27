@@ -42,14 +42,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.rounded.CheckCircleOutline
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -71,6 +79,8 @@ import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qrj.apexsu.KernelVersion
 import com.qrj.apexsu.Natives
 import com.qrj.apexsu.R
@@ -101,7 +111,6 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -111,14 +120,45 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
+private const val IOS_BG = 0xFF1C1C1E
+private const val IOS_SECONDARY = 0xFF8E8E93
+private const val IOS_SEPARATOR = 0xFF38383A
+private const val IOS_BLUE = 0xFF0A84FF
+private const val IOS_GREEN = 0xFF30D158
+private const val IOS_ORANGE = 0xFFFF9F0A
+
+class HomeViewModel : ViewModel() {
+    var selectedKoDisplayName by mutableStateOf<String?>(null)
+        private set
+
+    fun updateSelectedKoName(name: String?) {
+        selectedKoDisplayName = name
+    }
+}
+
 @Composable
 fun HomePager(
     navigator: Navigator,
     bottomInnerPadding: Dp
 ) {
+    val homeViewModel: HomeViewModel = viewModel()
     val kernelVersion = getKernelVersion()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var autoDetectedKmiText by remember { mutableStateOf<String?>(null) }
+    var autoDetectUnsupported by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val release = Os.uname().release
+            val detected = detectBundledKo(release)
+            withContext(Dispatchers.Main) {
+                autoDetectedKmiText = detected.text
+                autoDetectUnsupported = detected.unsupported
+            }
+        }
+    }
+
     val selectLkmLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -128,6 +168,8 @@ fun HomePager(
                 isKoFile(context, uri)
             }
             if (isKo) {
+                val selectedName = withContext(Dispatchers.IO) { getDisplayName(context, uri) ?: (uri.lastPathSegment ?: ".ko") }
+                homeViewModel.updateSelectedKoName(selectedName)
                 navigator.push(
                     Route.Flash(
                         FlashIt.FlashBoot(
@@ -162,14 +204,7 @@ fun HomePager(
     val checkUpdate = prefs.getBoolean("check_update", true)
 
     Scaffold(
-        topBar = {
-            TopBar(
-                scrollBehavior = scrollBehavior,
-                hazeState = hazeState,
-                hazeStyle = hazeStyle,
-                enableBlur = enableBlur,
-            )
-        },
+        topBar = { },
         popupHost = { },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
     ) { innerPadding ->
@@ -197,6 +232,9 @@ fun HomePager(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    HomeBanner(
+                        onClickSettings = { mainState.animateToPage(3) }
+                    )
                     if (ksuVersion != null && !Natives.isLkmMode) {
                         WarningCard(stringResource(id = R.string.home_gki_warning))
                     }
@@ -223,6 +261,9 @@ fun HomePager(
                         onclickModule = {
                             mainState.animateToPage(2)
                         },
+                        selectedKoName = homeViewModel.selectedKoDisplayName,
+                        autoDetectedKmiText = autoDetectedKmiText,
+                        autoDetectUnsupported = autoDetectUnsupported,
                     )
 
                     if (checkUpdate) {
@@ -283,49 +324,57 @@ fun UpdateCard() {
 }
 
 @Composable
-fun RebootDropdownItem(
-    @StringRes id: Int, reason: String = "",
-    showTopPopup: MutableState<Boolean>,
-    optionSize: Int,
-    index: Int,
+private fun HomeBanner(
+    onClickSettings: () -> Unit,
 ) {
-    DropdownItem(
-        text = stringResource(id),
-        optionSize = optionSize,
-        onSelectedIndexChange = {
-            reboot(reason)
-            showTopPopup.value = false
-        },
-        index = index
-    )
-}
-
-@Composable
-private fun TopBar(
-    scrollBehavior: ScrollBehavior,
-    hazeState: HazeState,
-    hazeStyle: HazeStyle,
-    enableBlur: Boolean,
-) {
-    TopAppBar(
-        modifier = if (enableBlur) {
-            Modifier.hazeEffect(hazeState) {
-                style = hazeStyle
-                blurRadius = 30.dp
-                noiseFactor = 0f
-            }
-        } else {
-            Modifier
-        },
-        color = if (enableBlur) Color.Transparent else colorScheme.surface,
-        title = stringResource(R.string.app_name),
-        actions = {
-            RebootListPopup(
-                modifier = Modifier.padding(end = 16.dp),
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
+        insideMargin = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 20.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = R.mipmap.ic_launcher_foreground),
+                contentDescription = "ApexSU",
+                modifier = Modifier.size(40.dp),
             )
-        },
-        scrollBehavior = scrollBehavior
-    )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp),
+            ) {
+                Text(
+                    text = "ApexSU",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.W700,
+                )
+                Text(
+                    text = "Root Manager",
+                    color = Color(IOS_SECONDARY),
+                    fontSize = 13.sp,
+                )
+            }
+            Card(
+                onClick = onClickSettings,
+                modifier = Modifier.size(36.dp),
+                colors = CardDefaults.defaultColors(color = colorScheme.surfaceContainer),
+                insideMargin = PaddingValues(0.dp),
+                cornerRadius = 18.dp,
+                showIndication = true,
+                pressFeedbackType = PressFeedbackType.Sink,
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Settings, contentDescription = null, tint = Color.White)
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -337,6 +386,9 @@ private fun StatusCard(
     onClickLoadLkm: () -> Unit = {},
     onClickSuperuser: () -> Unit = {},
     onclickModule: () -> Unit = {},
+    selectedKoName: String?,
+    autoDetectedKmiText: String?,
+    autoDetectUnsupported: Boolean,
 ) {
     val reduceMotion = LocalReduceMotion.current
     Column(
@@ -381,13 +433,7 @@ private fun StatusCard(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
-                        colors = CardDefaults.defaultColors(
-                            color = when {
-                                isDynamicColor -> colorScheme.secondaryContainer
-                                isInDarkTheme() -> Color(0xFF1A3825)
-                                else -> Color(0xFFDFFAE4)
-                            }
-                        ),
+                        colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
                         onClick = {
                             onClickInstall()
                         },
@@ -419,12 +465,26 @@ private fun StatusCard(
                                     .fillMaxSize()
                                     .padding(all = 16.dp)
                             ) {
-                                Text(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    text = workingText,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp),
+                                    ) {
+                                        Card(
+                                            modifier = Modifier.fillMaxSize(),
+                                            colors = CardDefaults.defaultColors(color = Color(IOS_GREEN)),
+                                            cornerRadius = 4.dp,
+                                            insideMargin = PaddingValues(0.dp),
+                                        ) {}
+                                    }
+                                    Text(
+                                        modifier = Modifier.padding(start = 8.dp),
+                                        text = stringResource(R.string.home_installed_id),
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White,
+                                    )
+                                }
                                 Spacer(Modifier.height(2.dp))
                                 Text(
                                     modifier = Modifier.fillMaxWidth(),
@@ -432,6 +492,17 @@ private fun StatusCard(
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     fontFamily = FontFamily.Monospace,
+                                    color = Color(IOS_SECONDARY),
+                                )
+                                Text(
+                                    text = "${stringResource(R.string.home_android_version)}: ${Build.VERSION.RELEASE}",
+                                    fontSize = 13.sp,
+                                    color = Color(IOS_SECONDARY),
+                                )
+                                Text(
+                                    text = "${stringResource(R.string.home_selinux_status)}: ${getSELinuxStatus()}",
+                                    fontSize = 13.sp,
+                                    color = Color(IOS_SECONDARY),
                                 )
                             }
                         }
@@ -507,51 +578,59 @@ private fun StatusCard(
 
             kernelVersion.isGKI() -> {
                 Card(
+                    onClick = onClickInstall,
                     showIndication = true,
-                    pressFeedbackType = PressFeedbackType.Sink
+                    pressFeedbackType = PressFeedbackType.Sink,
+                    colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
+                    cornerRadius = 12.dp,
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.Top,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Icon(
-                            Icons.Rounded.ErrorOutline,
-                            stringResource(R.string.home_kernel_module_not_found_title),
-                            modifier = Modifier.size(28.dp),
-                            tint = colorScheme.onBackground,
-                        )
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.home_kernel_module_not_found_title),
-                                fontWeight = FontWeight.SemiBold,
-                                color = colorScheme.onSurface,
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Icon(
+                                Icons.Outlined.Warning,
+                                stringResource(R.string.home_not_installed_id),
+                                modifier = Modifier.size(20.dp),
+                                tint = Color(IOS_ORANGE),
                             )
-                            Text(
-                                text = stringResource(R.string.home_kernel_module_not_found_body),
-                                color = colorScheme.onSurfaceVariantSummary,
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                TextButton(
-                                    text = stringResource(R.string.home_patch_boot_image),
-                                    onClick = onClickInstall,
-                                    modifier = Modifier.weight(1f),
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.home_not_installed_id),
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White,
                                 )
-                                TextButton(
-                                    text = stringResource(R.string.home_load_lkm_manually),
-                                    onClick = onClickLoadLkm,
-                                    modifier = Modifier.weight(1f),
+                                Text(
+                                    text = stringResource(R.string.home_tap_to_install_id),
+                                    color = Color(IOS_SECONDARY),
+                                    fontSize = 13.sp,
                                 )
                             }
                         }
+                        Hairline()
+                        LkmRow(
+                            icon = Icons.Rounded.FolderOpen,
+                            title = stringResource(R.string.home_pick_boot_image_id),
+                            subtitle = stringResource(R.string.home_pick_boot_image_sub_id),
+                            onClick = onClickInstall,
+                        )
+                        Hairline()
+                        LkmRow(
+                            icon = Icons.Rounded.Extension,
+                            title = stringResource(R.string.home_use_local_lkm_id),
+                            subtitle = when {
+                                !selectedKoName.isNullOrEmpty() -> selectedKoName
+                                autoDetectUnsupported -> stringResource(R.string.home_device_maybe_unsupported_gki_id)
+                                !autoDetectedKmiText.isNullOrEmpty() -> autoDetectedKmiText
+                                else -> stringResource(R.string.home_auto_pick_ko_id)
+                            },
+                            subtitleColor = if (autoDetectUnsupported) Color(IOS_ORANGE) else Color(IOS_SECONDARY),
+                            onClick = onClickLoadLkm,
+                        )
                     }
                 }
             }
@@ -581,6 +660,136 @@ private fun StatusCard(
             }
         }
     }
+}
+
+@Composable
+private fun Hairline() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(0.5.dp),
+    ) {
+        Card(
+            modifier = Modifier.fillMaxSize(),
+            colors = CardDefaults.defaultColors(color = Color(IOS_SEPARATOR)),
+            insideMargin = PaddingValues(0.dp),
+        ) {}
+    }
+}
+
+@Composable
+private fun LkmRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    subtitleColor: Color = Color(IOS_SECONDARY),
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.defaultColors(color = Color.Transparent),
+        insideMargin = PaddingValues(0.dp),
+        showIndication = true,
+        pressFeedbackType = PressFeedbackType.Sink,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(IOS_BLUE),
+                modifier = Modifier.size(20.dp),
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp),
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 15.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = subtitleColor,
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = Color(IOS_SECONDARY),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+private data class KoDetectResult(
+    val text: String?,
+    val unsupported: Boolean,
+)
+
+private fun detectBundledKo(release: String): KoDetectResult {
+    val androidMatch = Regex("android(\\d+)").find(release)?.groupValues?.getOrNull(1)
+    val kernelMatch = Regex("(\\d+\\.\\d+)").find(release)?.groupValues?.getOrNull(1)
+    val key = if (androidMatch != null && kernelMatch != null) "android$androidMatch-$kernelMatch" else null
+    val map = mapOf(
+        "android12-5.10" to "kernelsu-5.10.209-arm64.ko",
+        "android13-5.10" to "kernelsu-5.10.209-arm64.ko",
+        "android13-5.15" to "kernelsu-5.15.148-arm64.ko",
+        "android14-5.15" to "kernelsu-5.15.148-arm64.ko",
+        "android14-6.1" to "kernelsu-6.1.96-arm64.ko",
+        "android15-6.6" to "kernelsu-6.6.35-arm64.ko",
+        "android16-6.12" to "kernelsu-6.12.6-arm64.ko",
+    )
+    val matched = key?.let(map::get)
+    return if (key != null && matched != null) {
+        KoDetectResult("Terdeteksi: $key → ${matched.removePrefix("kernelsu-")}", unsupported = false)
+    } else {
+        KoDetectResult(null, unsupported = true)
+    }
+}
+
+private fun getDisplayName(context: Context, uri: Uri): String? {
+    return try {
+        context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index != -1 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+@Composable
+fun RebootDropdownItem(
+    @StringRes id: Int, reason: String = "",
+    showTopPopup: MutableState<Boolean>,
+    optionSize: Int,
+    index: Int,
+) {
+    DropdownItem(
+        text = stringResource(id),
+        optionSize = optionSize,
+        onSelectedIndexChange = {
+            reboot(reason)
+            showTopPopup.value = false
+        },
+        index = index
+    )
 }
 
 @Composable
