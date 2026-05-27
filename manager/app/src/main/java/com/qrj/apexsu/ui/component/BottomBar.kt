@@ -1,19 +1,17 @@
 package com.qrj.apexsu.ui.component
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.background
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cottage
 import androidx.compose.material.icons.rounded.Extension
@@ -26,14 +24,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
@@ -41,10 +42,16 @@ import kotlinx.coroutines.launch
 import com.qrj.apexsu.Natives
 import com.qrj.apexsu.R
 import com.qrj.apexsu.ui.LocalMainPagerState
-import com.qrj.apexsu.ui.theme.DarkApexColors
+import com.qrj.apexsu.ui.theme.LocalEnableBlur
+import com.qrj.apexsu.ui.theme.LocalEnableFloatingBottomBar
+import com.qrj.apexsu.ui.theme.LocalEnableFloatingBottomBarBlur
 import com.qrj.apexsu.ui.util.rootAvailable
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem
+import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.abs
 
 @Composable
@@ -56,37 +63,95 @@ fun BottomBar(
 ) {
     val isManager = Natives.isManager
     val fullFeatured = isManager && !Natives.requireNewKernel() && rootAvailable()
-    val visibleDestinations = if (fullFeatured) BottomBarDestination.entries else listOf(BottomBarDestination.Home, BottomBarDestination.Setting)
-    val items = visibleDestinations.map { it to androidx.compose.ui.res.stringResource(it.label) }
+
+    val visibleDestinations = if (fullFeatured) {
+        BottomBarDestination.entries
+    } else {
+        listOf(BottomBarDestination.Home, BottomBarDestination.Setting)
+    }
+
+    val items = visibleDestinations.map { destination ->
+        NavigationItem(
+            label = stringResource(destination.label),
+            icon = destination.icon,
+        )
+    }
+
     val mainState = LocalMainPagerState.current
+    val enableBlur = LocalEnableBlur.current
+    val enableFloatingBottomBar = LocalEnableFloatingBottomBar.current
+    val enableFloatingBottomBarBlur = LocalEnableFloatingBottomBarBlur.current
+
+    // Map visible tab index to actual pager page index
     val pageIndices = visibleDestinations.map { it.ordinal }
 
     fun tabToPage(tabIndex: Int): Int = pageIndices.getOrElse(tabIndex) { 0 }
+    fun pageToTab(pageIndex: Int): Int = pageIndices.indexOf(pageIndex).coerceAtLeast(0)
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(DarkApexColors.background)
-            .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        items.forEachIndexed { index, (item, label) ->
-            val selected = mainState.selectedPage == tabToPage(index)
-            val color = if (selected) DarkApexColors.blue else DarkApexColors.textSecondary
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { mainState.animateToPage(tabToPage(index)) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Icon(item.icon, contentDescription = label, tint = color, modifier = Modifier.size(24.dp))
-                Text(text = label, color = color, fontSize = 12.sp)
+    if (!enableFloatingBottomBar) {
+        NavigationBar(
+            modifier = modifier
+                .then(
+                    if (enableBlur) {
+                        Modifier.hazeEffect(hazeState) {
+                            style = hazeStyle
+                            blurRadius = 30.dp
+                            noiseFactor = 0f
+                        }
+                    } else Modifier
+                ),
+            color = if (enableBlur) Color.Transparent else MiuixTheme.colorScheme.surface,
+            content = {
+                items.forEachIndexed { index, item ->
+                    NavigationBarItem(
+                        modifier = Modifier.weight(1f),
+                        icon = item.icon,
+                        label = item.label,
+                        selected = mainState.selectedPage == tabToPage(index),
+                        onClick = {
+                            mainState.animateToPage(tabToPage(index))
+                        }
+                    )
+                }
+            }
+        )
+    } else {
+        FloatingBottomBar(
+            modifier = modifier
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                )
+                .padding(bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+            selectedIndex = { pageToTab(mainState.selectedPage) },
+            onSelected = { mainState.animateToPage(tabToPage(it)) },
+            backdrop = backdrop,
+            tabsCount = items.size,
+            isBlurEnabled = enableFloatingBottomBarBlur,
+        ) {
+            items.forEachIndexed { index, item ->
+                FloatingBottomBar(
+                    onClick = {
+                        mainState.animateToPage(tabToPage(index))
+                    },
+                    modifier = Modifier.defaultMinSize(minWidth = 76.dp)
+                ) {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        tint = MiuixTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = item.label,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Visible
+                    )
+                }
             }
         }
     }
@@ -99,12 +164,12 @@ enum class BottomBarDestination(
     Home(R.string.home, Icons.Rounded.Cottage),
     SuperUser(R.string.superuser, Icons.Rounded.Security),
     Module(R.string.module, Icons.Rounded.Extension),
-    Setting(R.string.settings, Icons.Rounded.Settings),
+    Setting(R.string.settings, Icons.Rounded.Settings)
 }
 
 class MainPagerState(
-    val pagerState: androidx.compose.foundation.pager.PagerState,
-    private val coroutineScope: CoroutineScope,
+    val pagerState: PagerState,
+    private val coroutineScope: CoroutineScope
 ) {
     var selectedPage by mutableIntStateOf(pagerState.currentPage)
         private set
@@ -116,30 +181,50 @@ class MainPagerState(
 
     fun animateToPage(targetIndex: Int) {
         if (targetIndex == selectedPage) return
+
         navJob?.cancel()
+
         selectedPage = targetIndex
         isNavigating = true
-        val distance = abs(targetIndex - pagerState.currentPage).coerceAtLeast(1)
+
+        val distance = abs(targetIndex - pagerState.currentPage).coerceAtLeast(2)
+        val duration = 100 * distance + 100
+        val layoutInfo = pagerState.layoutInfo
+        val pageSize = layoutInfo.pageSize + layoutInfo.pageSpacing
+        val currentDistanceInPages = targetIndex - pagerState.currentPage - pagerState.currentPageOffsetFraction
+        val scrollPixels = currentDistanceInPages * pageSize
+
         navJob = coroutineScope.launch {
             val myJob = coroutineContext.job
             try {
-                pagerState.animateScrollToPage(targetIndex)
+                pagerState.animateScrollBy(
+                    value = scrollPixels,
+                    animationSpec = tween(easing = EaseInOut, durationMillis = duration)
+                )
             } finally {
                 if (navJob == myJob) {
                     isNavigating = false
-                    if (pagerState.currentPage != targetIndex) selectedPage = pagerState.currentPage
+                    if (pagerState.currentPage != targetIndex) {
+                        selectedPage = pagerState.currentPage
+                    }
                 }
             }
         }
     }
 
     fun syncPage() {
-        if (!isNavigating && selectedPage != pagerState.currentPage) selectedPage = pagerState.currentPage
+        if (!isNavigating && selectedPage != pagerState.currentPage) {
+            selectedPage = pagerState.currentPage
+        }
     }
 }
 
 @Composable
 fun rememberMainPagerState(
-    pagerState: androidx.compose.foundation.pager.PagerState,
-    coroutineScope: CoroutineScope = rememberCoroutineScope(),
-): MainPagerState = remember(pagerState, coroutineScope) { MainPagerState(pagerState, coroutineScope) }
+    pagerState: PagerState,
+    coroutineScope: CoroutineScope = rememberCoroutineScope()
+): MainPagerState {
+    return remember(pagerState, coroutineScope) {
+        MainPagerState(pagerState, coroutineScope)
+    }
+}
