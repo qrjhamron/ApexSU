@@ -577,8 +577,9 @@ private fun StatusCard(
             }
 
             kernelVersion.isGKI() -> {
+                var expanded by remember { mutableStateOf(false) }
                 Card(
-                    onClick = onClickInstall,
+                    onClick = { expanded = !expanded },
                     showIndication = true,
                     pressFeedbackType = PressFeedbackType.Sink,
                     colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
@@ -611,26 +612,34 @@ private fun StatusCard(
                                 )
                             }
                         }
-                        Hairline()
-                        LkmRow(
-                            icon = Icons.Rounded.FolderOpen,
-                            title = stringResource(R.string.home_pick_boot_image_id),
-                            subtitle = stringResource(R.string.home_pick_boot_image_sub_id),
-                            onClick = onClickInstall,
-                        )
-                        Hairline()
-                        LkmRow(
-                            icon = Icons.Rounded.Extension,
-                            title = stringResource(R.string.home_use_local_lkm_id),
-                            subtitle = when {
-                                !selectedKoName.isNullOrEmpty() -> selectedKoName
-                                autoDetectUnsupported -> stringResource(R.string.home_device_maybe_unsupported_gki_id)
-                                !autoDetectedKmiText.isNullOrEmpty() -> autoDetectedKmiText
-                                else -> stringResource(R.string.home_auto_pick_ko_id)
-                            },
-                            subtitleColor = if (autoDetectUnsupported) Color(IOS_ORANGE) else Color(IOS_SECONDARY),
-                            onClick = onClickLoadLkm,
-                        )
+                        AnimatedVisibility(
+                            visible = expanded,
+                            enter = fadeIn(animationSpec = tween(200)),
+                            exit = fadeOut(animationSpec = tween(200)),
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                Hairline()
+                                LkmRow(
+                                    icon = Icons.Rounded.FolderOpen,
+                                    title = stringResource(R.string.home_pick_boot_image_id),
+                                    subtitle = stringResource(R.string.home_pick_boot_image_sub_id),
+                                    onClick = onClickInstall,
+                                )
+                                Hairline()
+                                LkmRow(
+                                    icon = Icons.Rounded.Extension,
+                                    title = stringResource(R.string.home_use_local_lkm_id),
+                                    subtitle = when {
+                                        !selectedKoName.isNullOrEmpty() -> selectedKoName
+                                        autoDetectUnsupported -> stringResource(R.string.home_device_maybe_unsupported_gki_id)
+                                        !autoDetectedKmiText.isNullOrEmpty() -> autoDetectedKmiText
+                                        else -> stringResource(R.string.home_auto_pick_ko_id)
+                                    },
+                                    subtitleColor = if (autoDetectUnsupported) Color(IOS_ORANGE) else Color(IOS_SECONDARY),
+                                    onClick = onClickLoadLkm,
+                                )
+                            }
+                        }
                     }
                 }
             }

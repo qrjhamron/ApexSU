@@ -35,58 +35,23 @@ internal fun resolveNativeKsudHelper(nativeLibraryDir: String): File {
     return File(nativeLibraryDir, "libksud.so")
 }
 
-internal fun prepareExecutableKsudHelper(
-    nativeHelper: File,
-    filesDir: File,
-    onLog: (String) -> Unit
-): File {
-    onLog("resolved_libksud_path=${nativeHelper.absolutePath}")
-    onLog("libksud_exists=${nativeHelper.exists()}")
-    onLog("libksud_can_read=${nativeHelper.canRead()}")
-    onLog("libksud_can_execute=${nativeHelper.canExecute()}")
-
-    if (!nativeHelper.exists() || !nativeHelper.canRead()) {
-        throw IllegalStateException(NATIVE_HELPER_MISSING)
-    }
-
-    val executableHelper = File(filesDir, "apexsu/libksud.so")
-    executableHelper.parentFile?.mkdirs()
-
-    val shouldCopy = !executableHelper.exists() ||
-        executableHelper.length() != nativeHelper.length() ||
-        executableHelper.lastModified() < nativeHelper.lastModified()
-    if (shouldCopy) {
-        nativeHelper.copyTo(executableHelper, overwrite = true)
-    }
-
-    executableHelper.setReadable(true, false)
-    executableHelper.setWritable(true, true)
-    executableHelper.setExecutable(true, false)
-
-    onLog("copied_helper_path=${executableHelper.absolutePath}")
-    onLog("copied_helper_exists=${executableHelper.exists()}")
-    onLog("copied_helper_can_read=${executableHelper.canRead()}")
-    onLog("copied_helper_can_execute=${executableHelper.canExecute()}")
-
-    if (!executableHelper.exists() || !executableHelper.canRead() || !executableHelper.canExecute()) {
-        throw IllegalStateException(NATIVE_HELPER_MISSING)
-    }
-
-    return executableHelper
-}
-
 private fun getKsuDaemonPath(onLog: ((String) -> Unit)? = null): String {
     val nativeLibraryDir = ksuApp.applicationInfo.nativeLibraryDir
     onLog?.invoke("nativeLibraryDir=$nativeLibraryDir")
     val nativeHelper = resolveNativeKsudHelper(nativeLibraryDir)
-    return prepareExecutableKsudHelper(
-        nativeHelper = nativeHelper,
-        filesDir = ksuApp.filesDir,
-        onLog = { line ->
-            onLog?.invoke(line)
-            Log.i(TAG, line)
-        }
-    ).absolutePath
+    val resolvedPath = nativeHelper.absolutePath
+    onLog?.invoke("resolved_libksud_path=$resolvedPath")
+    onLog?.invoke("libksud_exists=${nativeHelper.exists()}")
+    onLog?.invoke("libksud_can_read=${nativeHelper.canRead()}")
+    onLog?.invoke("libksud_can_execute=${nativeHelper.canExecute()}")
+    Log.i(TAG, "resolved_libksud_path=$resolvedPath")
+    Log.i(TAG, "libksud_exists=${nativeHelper.exists()}")
+    Log.i(TAG, "libksud_can_read=${nativeHelper.canRead()}")
+    Log.i(TAG, "libksud_can_execute=${nativeHelper.canExecute()}")
+    if (!nativeHelper.exists() || !nativeHelper.canRead()) {
+        throw IllegalStateException(NATIVE_HELPER_MISSING)
+    }
+    return resolvedPath
 }
 
 data class FlashResult(
