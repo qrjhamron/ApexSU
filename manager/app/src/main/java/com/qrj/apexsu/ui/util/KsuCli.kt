@@ -37,7 +37,7 @@ internal fun resolveNativeKsudHelper(nativeLibraryDir: String): File {
 
 internal fun prepareExecutableKsudHelper(
     nativeHelper: File,
-    filesDir: File,
+    codeCacheDir: File,
     onLog: (String) -> Unit
 ): File {
     onLog("resolved_libksud_path=${nativeHelper.absolutePath}")
@@ -49,7 +49,7 @@ internal fun prepareExecutableKsudHelper(
         throw IllegalStateException(NATIVE_HELPER_MISSING)
     }
 
-    val executableHelper = File(filesDir, "apexsu/libksud.so")
+    val executableHelper = File(codeCacheDir, "apexsu/libksud.so")
     executableHelper.parentFile?.mkdirs()
 
     val shouldCopy = !executableHelper.exists() ||
@@ -81,7 +81,7 @@ private fun getKsuDaemonPath(onLog: ((String) -> Unit)? = null): String {
     val nativeHelper = resolveNativeKsudHelper(nativeLibraryDir)
     return prepareExecutableKsudHelper(
         nativeHelper = nativeHelper,
-        filesDir = ksuApp.filesDir,
+        codeCacheDir = ksuApp.codeCacheDir,
         onLog = { line ->
             onLog?.invoke(line)
             Log.i(TAG, line)
