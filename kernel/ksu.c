@@ -151,7 +151,6 @@ void kernelsu_exit(void)
     if (ksu_cred) {
         put_cred(ksu_cred);
     }
-
 }
 
 module_init(kernelsu_init);

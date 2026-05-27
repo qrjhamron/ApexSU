@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <linux/gfp.h>
+#include <linux/module.h>
 #include <linux/fdtable.h>
 #include <linux/export.h>
 #include <linux/anon_inodes.h>
@@ -14,13 +15,16 @@
 #include <linux/version.h>
 #include <linux/mount.h>
 
-#include "objsec.h"
-
 #include "klog.h" // IWYU pragma: keep
 #include "selinux/selinux.h"
 #include "ksud.h"
+#include "supercalls.h"
 
 #include "file_wrapper.h"
+
+#ifndef CONFIG_KSU_CI
+#include "objsec.h"
+#endif
 
 struct ksu_file_wrapper {
     struct file *orig;
@@ -476,7 +480,11 @@ static const struct dentry_operations ksu_file_wrapper_d_ops = {
     .d_release = ksu_wrapper_d_release
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+#ifdef CONFIG_KSU_CI
+#define ksu_anon_inode_create_getfile_compat(name, fops, priv, flags,          \
+                                             context_inode)                    \
+    anon_inode_getfile(name, fops, priv, flags)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
 #define ksu_anon_inode_create_getfile_compat anon_inode_create_getfile
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 #define ksu_anon_inode_create_getfile_compat anon_inode_getfile_secure
@@ -590,12 +598,17 @@ int ksu_install_file_wrapper(int fd)
     struct inode *wrapper_inode = file_inode(wrapper_file);
     // libc's stdio relies on the fstat() result of the fd to determine its buffer type.
     wrapper_inode->i_mode = file_inode(orig_file)->i_mode;
-    struct inode_security_struct *wrapper_sec = selinux_inode(wrapper_inode);
-    // Use ksu_file_sid to bypass SELinux check.
-    // When we call `su` from terminal app, this is useful.
-    if (wrapper_sec) {
-        wrapper_sec->sid = ksu_file_sid;
+#ifndef CONFIG_KSU_CI
+    {
+        struct inode_security_struct *wrapper_sec =
+            selinux_inode(wrapper_inode);
+        // Use ksu_file_sid to bypass SELinux check.
+        // When we call `su` from terminal app, this is useful.
+        if (wrapper_sec) {
+            wrapper_sec->sid = ksu_file_sid;
+        }
     }
+#endif
     // Install open file operation for inode.
     wrapper_inode->i_fop = &ksu_file_wrapper_inode_fops;
 
@@ -631,7 +644,7 @@ done:
 
 void ksu_file_wrapper_init(void)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0) && !defined(CONFIG_KSU_CI)
     static const struct file_operations tmp = { .owner = THIS_MODULE };
     struct file *dummy = anon_inode_getfile("dummy", &tmp, NULL, 0);
     if (IS_ERR(dummy)) {
@@ -645,8 +658,5 @@ void ksu_file_wrapper_init(void)
         pr_err("file_wrapper: initialize anon_inode_mnt failed, got NULL\n");
     }
     fput(dummy);
-#endif
-}
-(dummy);
 #endif
 }

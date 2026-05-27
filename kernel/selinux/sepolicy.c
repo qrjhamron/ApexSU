@@ -684,8 +684,8 @@ static bool add_type(struct policydb *db, const char *type_name, bool attr)
 
     old_type_bytes = sizeof(struct ebitmap) * old_nprim;
     new_type_bytes = sizeof(struct ebitmap) * value;
-    new_type_attr_map_array = (struct ebitmap *)kvmalloc(new_type_bytes,
-                                                          GFP_ATOMIC);
+    new_type_attr_map_array =
+        (struct ebitmap *)kvmalloc(new_type_bytes, GFP_ATOMIC);
     if (!new_type_attr_map_array) {
         pr_err("add_type: alloc type_attr_map_array failed\n");
         kfree(key);
@@ -706,8 +706,8 @@ static bool add_type(struct policydb *db, const char *type_name, bool attr)
 
     old_struct_bytes = sizeof(*db->type_val_to_struct) * old_nprim;
     new_struct_bytes = sizeof(*db->type_val_to_struct) * value;
-    new_type_val_to_struct = (struct type_datum **)kvmalloc(new_struct_bytes,
-                                                             GFP_ATOMIC);
+    new_type_val_to_struct =
+        (struct type_datum **)kvmalloc(new_struct_bytes, GFP_ATOMIC);
     if (!new_type_val_to_struct) {
         pr_err("add_type: alloc type_val_to_struct failed\n");
         ebitmap_destroy(&new_type_attr_map_array[value - 1]);

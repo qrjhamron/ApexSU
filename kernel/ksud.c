@@ -272,10 +272,10 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
         }
     }
 
-    if (unlikely(atomic_read(&first_zygote) &&
-                 !memcmp(filename->name, app_process,
-                         sizeof(app_process) - 1) &&
-                 argv)) {
+    if (unlikely(
+            atomic_read(&first_zygote) &&
+            !memcmp(filename->name, app_process, sizeof(app_process) - 1) &&
+            argv)) {
         char buf[16];
         if (check_argv(*argv, 1, "-Xzygote", buf, sizeof(buf))) {
             int ret = -ESRCH;
@@ -289,15 +289,15 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
             struct task_struct *init_task =
                 rcu_dereference(current->real_parent);
             if (!ksu_task_work_prepare_enqueue()) {
-                pr_warn("skip post-fs-data task_work while module is shutting down\n");
+                pr_warn(
+                    "skip post-fs-data task_work while module is shutting down\n");
                 atomic_set(&first_zygote, 1);
                 rcu_read_unlock();
                 return 0;
             }
 
             if (init_task)
-                ret = task_work_add(init_task, &on_post_fs_data_cb,
-                                    TWA_RESUME);
+                ret = task_work_add(init_task, &on_post_fs_data_cb, TWA_RESUME);
             rcu_read_unlock();
 
             if (ret) {

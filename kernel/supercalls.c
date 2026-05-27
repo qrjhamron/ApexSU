@@ -609,9 +609,9 @@ static int add_try_umount(void __user *arg)
     }
 
     case KSU_UMOUNT_ADD: {
-        int ret = copy_user_cstr_path(buf, sizeof(buf),
-                                      (const char __user *)cmd.arg,
-                                      "cmd_add_try_umount");
+        int ret =
+            copy_user_cstr_path(buf, sizeof(buf), (const char __user *)cmd.arg,
+                                "cmd_add_try_umount");
         if (ret)
             return ret;
 
@@ -656,9 +656,9 @@ static int add_try_umount(void __user *arg)
 
     // this is just strcmp'd wipe anyway
     case KSU_UMOUNT_DEL: {
-        int ret = copy_user_cstr_path(buf, sizeof(buf),
-                                      (const char __user *)cmd.arg,
-                                      "cmd_del_try_umount");
+        int ret =
+            copy_user_cstr_path(buf, sizeof(buf), (const char __user *)cmd.arg,
+                                "cmd_del_try_umount");
         if (ret)
             return ret;
 
@@ -779,8 +779,7 @@ struct install_tw {
 
 static void install_tw_func(struct callback_head *cb)
 {
-    struct install_tw *tw =
-        container_of(cb, struct install_tw, cb);
+    struct install_tw *tw = container_of(cb, struct install_tw, cb);
     int fd = install();
     pr_info("[%d] install: %d\n", current->pid, fd);
 
@@ -839,14 +838,9 @@ static struct kprobe reboot_kp = {
 };
 static bool reboot_kp_registered;
 
-static const char *const anon_inode_names[] = {
-    "[eventpoll]",
-    "[signalfd]",
-    "[timerfd]",
-    "[io_uring]",
-    "[userfaultfd]",
-    "[pidfd]"
-};
+static const char *const anon_inode_names[] = { "[eventpoll]",   "[signalfd]",
+                                                "[timerfd]",     "[io_uring]",
+                                                "[userfaultfd]", "[pidfd]" };
 const char *ksu_anon_inode_name = "[eventpoll]";
 
 void ksu_supercalls_init(void)
@@ -855,7 +849,8 @@ void ksu_supercalls_init(void)
     u8 random_index = 0;
 
     get_random_bytes(&random_index, sizeof(random_index));
-    ksu_anon_inode_name = anon_inode_names[random_index % ARRAY_SIZE(anon_inode_names)];
+    ksu_anon_inode_name =
+        anon_inode_names[random_index % ARRAY_SIZE(anon_inode_names)];
 
     pr_info("IOCTL Commands:\n");
     for (i = 0; ksu_ioctl_handlers[i].handler; i++) {

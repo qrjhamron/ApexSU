@@ -197,8 +197,7 @@ static int get_object(char *buf, char __user *user_object, size_t buf_sz,
     return 0;
 }
 
-static int copy_sepol_string(char *buf, char __user *user_object,
-                             size_t buf_sz)
+static int copy_sepol_string(char *buf, char __user *user_object, size_t buf_sz)
 {
     long copied;
 
@@ -418,8 +417,8 @@ int handle_sepolicy(unsigned long arg3, void __user *arg4)
             pr_err("sepol: copy cls failed.\n");
             goto exit;
         }
-        if (copy_sepol_string(default_type, data.sepol4,
-                              sizeof(default_type)) < 0) {
+        if (copy_sepol_string(default_type, data.sepol4, sizeof(default_type)) <
+            0) {
             pr_err("sepol: copy default_type failed.\n");
             goto exit;
         }
@@ -457,8 +456,8 @@ int handle_sepolicy(unsigned long arg3, void __user *arg4)
             pr_err("sepol: copy cls failed.\n");
             goto exit;
         }
-        if (copy_sepol_string(default_type, data.sepol4,
-                              sizeof(default_type)) < 0) {
+        if (copy_sepol_string(default_type, data.sepol4, sizeof(default_type)) <
+            0) {
             pr_err("sepol: copy default_type failed.\n");
             goto exit;
         }
@@ -509,7 +508,8 @@ exit:
 }
 
 #if IS_ENABLED(CONFIG_KUNIT) && defined(CONFIG_COMPAT)
-static void sepol_data_from_compat_translates_user_pointers_test(struct kunit *test)
+static void
+sepol_data_from_compat_translates_user_pointers_test(struct kunit *test)
 {
     struct compat_sepol_data compat = {
         .cmd = CMD_NORMAL_PERM,

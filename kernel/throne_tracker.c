@@ -36,7 +36,8 @@ struct uid_data {
     char package[KSU_MAX_PACKAGE_NAME];
 };
 
-static int parse_packages_list_row(char *buf, ssize_t count, struct uid_data *out)
+static int parse_packages_list_row(char *buf, ssize_t count,
+                                   struct uid_data *out)
 {
     char *tmp;
     char *package;
@@ -184,7 +185,8 @@ void ksu_set_manager_appid(uid_t appid)
 #ifdef CONFIG_KSU_DEBUG
     ksu_set_manager_identity(appid, "debug.manager");
 #else
-    pr_warn("ignoring manager appid update without verified package identity\n");
+    pr_warn(
+        "ignoring manager appid update without verified package identity\n");
 #endif
 }
 
@@ -224,9 +226,9 @@ bool ksu_manager_identity_matches(uid_t appid, const char *package)
         return false;
 
     read_lock(&manager_identity_lock);
-    matched = ksu_manager_verified && ksu_manager_appid == appid &&
-              strncmp(ksu_manager_package, package,
-                      sizeof(ksu_manager_package)) == 0;
+    matched =
+        ksu_manager_verified && ksu_manager_appid == appid &&
+        strncmp(ksu_manager_package, package, sizeof(ksu_manager_package)) == 0;
     read_unlock(&manager_identity_lock);
 
     return matched;
@@ -564,8 +566,9 @@ static bool manager_identity_exists_in_packages(struct list_head *uid_list)
             continue;
         }
 
-        pr_warn("manager appid %d also belongs to non-manager package %s; invalidating\n",
-                np->uid, np->package);
+        pr_warn(
+            "manager appid %d also belongs to non-manager package %s; invalidating\n",
+            np->uid, np->package);
         return false;
     }
 
@@ -691,7 +694,8 @@ void track_throne(bool prune_only)
         line_start = pos;
     }
     if (!parse_failed && pos != line_start) {
-        pr_err("update_uid: trailing unterminated packages.list row rejected\n");
+        pr_err(
+            "update_uid: trailing unterminated packages.list row rejected\n");
         parse_failed = true;
     }
     filp_close(fp, 0);
@@ -788,7 +792,8 @@ static void manager_identity_stale_after_refresh_start_test(struct kunit *test)
     KUNIT_EXPECT_FALSE(test, is_uid_manager(12345));
 }
 
-static void manager_identity_removed_or_wrong_package_denied_test(struct kunit *test)
+static void
+manager_identity_removed_or_wrong_package_denied_test(struct kunit *test)
 {
     struct list_head uid_list;
     struct uid_data row = {};
@@ -834,8 +839,7 @@ static void parse_row_rejects_exact_buffer_size_test(struct kunit *test)
     char line[KSU_MAX_PACKAGE_NAME];
 
     memset(line, 'a', sizeof(line));
-    KUNIT_EXPECT_EQ(test,
-                    parse_packages_list_row(line, sizeof(line), &out),
+    KUNIT_EXPECT_EQ(test, parse_packages_list_row(line, sizeof(line), &out),
                     -ENAMETOOLONG);
 }
 
@@ -866,8 +870,7 @@ static void parse_row_rejects_overlong_package_name_test(struct kunit *test)
     line[i++] = '\n';
     line[i] = '\0';
 
-    KUNIT_EXPECT_EQ(test,
-                    parse_packages_list_row(line, strlen(line), &out),
+    KUNIT_EXPECT_EQ(test, parse_packages_list_row(line, strlen(line), &out),
                     -ENAMETOOLONG);
 }
 
@@ -884,22 +887,23 @@ static void parse_row_rejects_malformed_uid_test(struct kunit *test)
     struct uid_data out = {};
     char line[] = "com.example.app not_uid /data/app/example/base.apk\n";
 
-    KUNIT_EXPECT_EQ(test,
-                    parse_packages_list_row(line, strlen(line), &out),
+    KUNIT_EXPECT_EQ(test, parse_packages_list_row(line, strlen(line), &out),
                     -EINVAL);
 }
 
 static void parse_row_accepts_valid_manager_row_test(struct kunit *test)
 {
     struct uid_data out = {};
-    char line[] = "me.weishu.kernelsu 10234 1 /data/user/0 default:targetSdkVersion=34 none 0 0 1 @null\n";
+    char line[] =
+        "me.weishu.kernelsu 10234 1 /data/user/0 default:targetSdkVersion=34 none 0 0 1 @null\n";
 
     KUNIT_EXPECT_EQ(test, parse_packages_list_row(line, strlen(line), &out), 0);
     KUNIT_EXPECT_EQ(test, out.uid, (u32)10234);
     KUNIT_EXPECT_STREQ(test, out.package, "me.weishu.kernelsu");
 }
 
-static void parse_row_accepts_valid_non_manager_same_appid_test(struct kunit *test)
+static void
+parse_row_accepts_valid_non_manager_same_appid_test(struct kunit *test)
 {
     struct uid_data out = {};
     char line[] =

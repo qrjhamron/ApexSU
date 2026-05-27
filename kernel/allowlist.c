@@ -310,12 +310,12 @@ static int profile_valid(struct app_profile *profile)
         return -EINVAL;
     }
 
-    uses_root_config =
-        profile->allow_su || fixed_cstr_eq(profile->key, "#", sizeof(profile->key));
+    uses_root_config = profile->allow_su ||
+                       fixed_cstr_eq(profile->key, "#", sizeof(profile->key));
     if (uses_root_config) {
-        template_len = validate_fixed_cstr(
-            profile->rp_config.template_name,
-            sizeof(profile->rp_config.template_name));
+        template_len =
+            validate_fixed_cstr(profile->rp_config.template_name,
+                                sizeof(profile->rp_config.template_name));
         if (template_len < 0) {
             pr_err("invalid app profile template name\n");
             return -EINVAL;
@@ -332,8 +332,7 @@ static int profile_valid(struct app_profile *profile)
 static void remove_uid_from_policy_cache(uid_t uid)
 {
     if (likely(uid <= BITMAP_UID_MAX)) {
-        allow_list_bitmap[uid / BITS_PER_BYTE] &=
-            ~(1 << (uid % BITS_PER_BYTE));
+        allow_list_bitmap[uid / BITS_PER_BYTE] &= ~(1 << (uid % BITS_PER_BYTE));
     }
     remove_uid_from_arr(uid);
 }
@@ -341,8 +340,7 @@ static void remove_uid_from_policy_cache(uid_t uid)
 static void add_uid_to_policy_cache(uid_t uid)
 {
     if (likely(uid <= BITMAP_UID_MAX)) {
-        allow_list_bitmap[uid / BITS_PER_BYTE] |=
-            1 << (uid % BITS_PER_BYTE);
+        allow_list_bitmap[uid / BITS_PER_BYTE] |= 1 << (uid % BITS_PER_BYTE);
     } else {
         int i;
 
@@ -454,7 +452,8 @@ out:
         // set default non root profile
         memcpy(&default_non_root_profile, &profile->nrp_config.profile,
                sizeof(default_non_root_profile));
-    } else if (unlikely(fixed_cstr_eq(profile->key, "#", sizeof(profile->key)))) {
+    } else if (unlikely(
+                   fixed_cstr_eq(profile->key, "#", sizeof(profile->key)))) {
         // set default root profile
         // TODO: Do we really need this?
         memcpy(&default_root_profile, &profile->rp_config.profile,
@@ -725,7 +724,8 @@ static void default_root_rejects_non_nul_domain_test(struct kunit *test)
     KUNIT_EXPECT_EQ(test, ksu_set_app_profile(&profile), -EINVAL);
 }
 
-static void invalid_default_root_does_not_mutate_previous_test(struct kunit *test)
+static void
+invalid_default_root_does_not_mutate_previous_test(struct kunit *test)
 {
     struct app_profile valid;
     struct app_profile invalid;

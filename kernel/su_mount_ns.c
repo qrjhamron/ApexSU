@@ -205,8 +205,9 @@ void setup_mount_ns(int32_t ns_mode)
     tw->ns_mode = ns_mode;
     if (!ksu_task_work_prepare_enqueue()) {
         kfree(tw);
-        pr_err("skip mnt_ns task_work while module is shutting down for pid: %d.\n",
-               current->pid);
+        pr_err(
+            "skip mnt_ns task_work while module is shutting down for pid: %d.\n",
+            current->pid);
         return;
     }
     if (task_work_add(current, &tw->cb, TWA_RESUME)) {

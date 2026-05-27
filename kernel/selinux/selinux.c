@@ -2,6 +2,51 @@
 #include "selinux.h"
 #include "linux/cred.h"
 #include "linux/sched.h"
+#ifdef CONFIG_KSU_CI
+#include "../klog.h" // IWYU pragma: keep
+
+u32 ksu_file_sid __read_mostly = 0;
+
+void setup_selinux(const char *domain, struct cred *cred)
+{
+}
+void setup_ksu_cred(void)
+{
+}
+void setenforce(bool enforce)
+{
+}
+bool getenforce(void)
+{
+    return true;
+}
+void cache_sid(void)
+{
+}
+bool is_task_ksu_domain(const struct cred *cred)
+{
+    return false;
+}
+bool is_ksu_domain(void)
+{
+    return false;
+}
+bool is_zygote(const struct cred *cred)
+{
+    return false;
+}
+bool is_init(const struct cred *cred)
+{
+    return false;
+}
+void apply_kernelsu_rules(void)
+{
+}
+int handle_sepolicy(unsigned long arg3, void __user *arg4)
+{
+    return -EOPNOTSUPP;
+}
+#else
 #include "objsec.h"
 #include "linux/version.h"
 #include "../klog.h" // IWYU pragma: keep
@@ -208,3 +253,4 @@ bool is_init(const struct cred *cred)
 {
     return is_sid_match(cred, cached_init_sid, INIT_CONTEXT);
 }
+#endif

@@ -52,7 +52,8 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
         cb->func = ksu_install_manager_fd_tw_func;
         if (!ksu_task_work_prepare_enqueue()) {
             kfree(cb);
-            pr_warn("install manager fd skip task_work while module is shutting down\n");
+            pr_warn(
+                "install manager fd skip task_work while module is shutting down\n");
             return 0;
         }
         if (task_work_add(current, cb, TWA_RESUME)) {
