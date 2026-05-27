@@ -1,10 +1,31 @@
-# ApexSU
+<p align="center">
+  <img src="website/docs/public/logo.png" alt="ApexSU Logo" width="140" />
+</p>
+
+<h1 align="center">ApexSU</h1>
+
+<p align="center">
+  <a href="https://github.com/qrjhamron/ApexSU/releases">
+    <img src="https://img.shields.io/github/v/release/qrjhamron/ApexSU?display_name=tag&sort=semver" alt="GitHub Release" />
+  </a>
+  <a href="https://github.com/qrjhamron/ApexSU/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/qrjhamron/ApexSU/ci.yml?branch=main&label=CI" alt="CI Status" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-GPL--2.0-blue.svg" alt="License: GPL-2.0" />
+  </a>
+</p>
 
 ApexSU is a security-focused Android root management project based on KernelSU, with a Rust-first userspace, stricter kernel ABI checks, safer module handling, and audit-focused release practices.
 
 ## Project Overview
 
 ApexSU targets transparent, maintainable, device-owner root management. The project prioritizes kernel safety, explicit authorization checks, and verifiable build/test evidence over stealth claims.
+
+## Releases
+
+- Latest builds and assets: [GitHub Releases](https://github.com/qrjhamron/ApexSU/releases)
+- Release artifacts include APK and per-KMI `kernelsu.ko` variants.
 
 ## What Is ApexSU?
 
