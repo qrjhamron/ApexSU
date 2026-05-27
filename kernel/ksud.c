@@ -677,16 +677,16 @@ static void stop_init_rc_hook()
 {
     if (!READ_ONCE(stop_work_initialized))
         return;
-    bool ret = schedule_work(&stop_init_rc_hook_work);
-    pr_info("unregister init_rc_hook kprobe: %d!\n", ret);
+    schedule_work(&stop_init_rc_hook_work);
+    pr_info("unregister init_rc_hook kprobe!\n");
 }
 
 static void stop_execve_hook()
 {
     if (!READ_ONCE(stop_work_initialized))
         return;
-    bool ret = schedule_work(&stop_execve_hook_work);
-    pr_info("unregister execve kprobe: %d!\n", ret);
+    schedule_work(&stop_execve_hook_work);
+    pr_info("unregister execve kprobe!\n");
 }
 
 static void stop_input_hook()
@@ -696,8 +696,8 @@ static void stop_input_hook()
     if (atomic_cmpxchg(&input_hook_stopped, 0, 1) != 0) {
         return;
     }
-    bool ret = schedule_work(&stop_input_hook_work);
-    pr_info("unregister input kprobe: %d!\n", ret);
+    schedule_work(&stop_input_hook_work);
+    pr_info("unregister input kprobe!\n");
 }
 
 static void ksu_ksud_unregister_all_locked(void)
