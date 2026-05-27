@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
@@ -77,6 +79,7 @@ import com.qrj.apexsu.ui.util.isAbDevice
 import com.qrj.apexsu.ui.util.rootAvailable
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -293,52 +296,35 @@ fun InstallScreen() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
+                    onClick = onBootUpload
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.install_patch_local_boot_image),
-                            color = colorScheme.onSurface
-                        )
-                        TextButton(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            text = stringResource(R.string.install_select_boot_image),
-                            colors = ButtonDefaults.textButtonColorsPrimary(),
-                            onClick = onBootUpload
-                        )
-                        val bootDetailsText = selectedBootDetails?.let { details ->
-                            buildString {
-                                append(details.displayName)
-                                append("\n")
-                                append(stringResource(R.string.install_file_size))
-                                append(": ")
-                                append(details.sizeBytes?.let(::formatFileSize) ?: stringResource(R.string.install_file_unavailable))
-                                append("\n")
-                                append(stringResource(R.string.install_file_sha256))
-                                append(": ")
-                                append(details.sha256 ?: stringResource(R.string.install_file_unavailable))
-                            }
-                        } ?: selectedBootUri?.let {
-                            stringResource(R.string.install_reading_file_details)
+                    val bootDetailsText = selectedBootDetails?.let { details ->
+                        buildString {
+                            append(details.displayName)
+                            append("\n")
+                            append(stringResource(R.string.install_file_size))
+                            append(": ")
+                            append(details.sizeBytes?.let(::formatFileSize) ?: stringResource(R.string.install_file_unavailable))
+                            append("\n")
+                            append(stringResource(R.string.install_file_sha256))
+                            append(": ")
+                            append(details.sha256 ?: stringResource(R.string.install_file_unavailable))
                         }
-                        if (bootDetailsText != null) {
-                            Text(
-                                modifier = Modifier.padding(top = 8.dp),
-                                text = stringResource(R.string.install_boot_step_indicator),
-                                color = colorScheme.primary
-                            )
-                            Text(
-                                modifier = Modifier.padding(top = 8.dp),
-                                text = bootDetailsText,
-                                color = colorScheme.onSurfaceVariantSummary
-                            )
-                        }
+                    } ?: selectedBootUri?.let {
+                        stringResource(R.string.install_reading_file_details)
                     }
+
+                    BasicComponent(
+                        title = stringResource(R.string.install_patch_local_boot_image),
+                        summary = bootDetailsText ?: stringResource(R.string.install_select_boot_image),
+                        endActions = {
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                tint = colorScheme.onSurfaceVariantSummary
+                            )
+                        }
+                    )
                 }
                 AnimatedVisibility(
                     visible = installMethod is InstallMethod.DirectInstall || installMethod is InstallMethod.DirectInstallToInactiveSlot,
@@ -389,37 +375,25 @@ fun InstallScreen() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
+                    onClick = onLkmUpload
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.install_load_lkm_manually),
-                            color = colorScheme.onSurface
-                        )
-                        TextButton(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            text = stringResource(R.string.install_select_lkm_file),
-                            colors = ButtonDefaults.textButtonColorsPrimary(),
-                            onClick = onLkmUpload
-                        )
-                        val lkmDetailsText = when {
-                            selectedLkmLabel != null -> selectedLkmLabel
-                            selectedLkmUriString != null -> stringResource(R.string.install_reading_selected_file)
-                            else -> null
-                        }
-                        if (lkmDetailsText != null) {
-                            Text(
-                                modifier = Modifier.padding(top = 8.dp),
-                                text = lkmDetailsText,
-                                color = colorScheme.onSurfaceVariantSummary
+                    val lkmDetailsText = when {
+                        selectedLkmLabel != null -> selectedLkmLabel
+                        selectedLkmUriString != null -> stringResource(R.string.install_reading_selected_file)
+                        else -> null
+                    }
+
+                    BasicComponent(
+                        title = stringResource(R.string.install_load_lkm_manually),
+                        summary = lkmDetailsText ?: stringResource(R.string.install_select_lkm_file),
+                        endActions = {
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                tint = colorScheme.onSurfaceVariantSummary
                             )
                         }
-                    }
+                    )
                 }
                 TextButton(
                     modifier = Modifier

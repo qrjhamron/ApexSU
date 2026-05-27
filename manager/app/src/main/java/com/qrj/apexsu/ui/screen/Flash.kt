@@ -217,21 +217,25 @@ fun FlashScreen(
             FlashIt.FlashRestore -> context.getString(R.string.settings_restore_stock_image)
             FlashIt.FlashUninstall -> context.getString(R.string.settings_uninstall)
         }
-        confirmDialog.showConfirm(
-            title = context.getString(
-                if (flashIt is FlashIt.PatchBoot) {
-                    R.string.patch_confirm_title
-                } else {
-                    R.string.flash_confirm_title
-                }
-            ),
-            content = context.getString(
-                R.string.flash_confirm_content,
-                flashTarget,
-                backupStatus,
-                context.getString(R.string.flash_estimated_time_value)
+        if (flashIt is FlashIt.FlashPatchedBoot) {
+            confirmed = true
+        } else {
+            confirmDialog.showConfirm(
+                title = context.getString(
+                    if (flashIt is FlashIt.PatchBoot) {
+                        R.string.patch_confirm_title
+                    } else {
+                        R.string.flash_confirm_title
+                    }
+                ),
+                content = context.getString(
+                    R.string.flash_confirm_content,
+                    flashTarget,
+                    backupStatus,
+                    context.getString(R.string.flash_estimated_time_value)
+                )
             )
-        )
+        }
     }
 
     LaunchedEffect(confirmed) {
