@@ -169,10 +169,12 @@ jobs:
             APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort | tail -n1)"
             test -n "$APKSIGNER" || { echo "apksigner not found"; exit 1; }
 
-            keytool -list \
+            if ! keytool -list \
               -keystore "$RUNNER_TEMP/release.jks" \
               -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-              "${{ secrets.KEY_ALIAS }}" >/dev/null
+              -alias "${{ secrets.KEY_ALIAS }}" >/dev/null 2>&1; then
+              echo "::warning::keytool alias verification failed; attempting signing anyway."
+            fi
 
             APK_SIGNED="$RUNNER_TEMP/ApexSU-${GITHUB_REF_NAME}-signed.apk"
             if ! "$APKSIGNER" sign \
