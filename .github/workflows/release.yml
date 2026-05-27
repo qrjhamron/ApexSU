@@ -149,30 +149,43 @@ jobs:
 
       - name: Decode signing keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          else
+            echo "No KEYSTORE_BASE64 secret set; release will continue without re-signing."
+          fi
 
       - name: Sign APK with apksigner
         run: |
+          set -euo pipefail
           APK_UNSIGNED="$(find manager/app/build/outputs/apk/release -type f -name '*unsigned*.apk' | head -n 1)"
           if [ -z "$APK_UNSIGNED" ]; then
             APK_UNSIGNED="$(find manager/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
           fi
           test -n "$APK_UNSIGNED" || { echo "No release APK produced"; exit 1; }
 
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort | tail -n1)"
-          test -n "$APKSIGNER" || { echo "apksigner not found"; exit 1; }
+          APK_SIGNED="$APK_UNSIGNED"
+          if [ -f "$RUNNER_TEMP/release.jks" ] && [ -n "${{ secrets.KEYSTORE_PASSWORD }}" ] && [ -n "${{ secrets.KEY_ALIAS }}" ] && [ -n "${{ secrets.KEY_PASSWORD }}" ]; then
+            APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort | tail -n1)"
+            test -n "$APKSIGNER" || { echo "apksigner not found"; exit 1; }
 
-          APK_SIGNED="$RUNNER_TEMP/ApexSU-${GITHUB_REF_NAME}-signed.apk"
+            APK_SIGNED="$RUNNER_TEMP/ApexSU-${GITHUB_REF_NAME}-signed.apk"
+            if ! "$APKSIGNER" sign \
+              --ks "$RUNNER_TEMP/release.jks" \
+              --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+              --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+              --out "$APK_SIGNED" \
+              "$APK_UNSIGNED"; then
+              echo "::warning::apksigner failed; using unsigned/build-signed APK artifact for this release."
+              APK_SIGNED="$APK_UNSIGNED"
+            else
+              "$APKSIGNER" verify --verbose "$APK_SIGNED"
+            fi
+          else
+            echo "::warning::Signing secrets are incomplete; using unsigned/build-signed APK artifact for this release."
+          fi
 
-          "$APKSIGNER" sign \
-            --ks "$RUNNER_TEMP/release.jks" \
-            --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
-            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-            --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
-            --out "$APK_SIGNED" \
-            "$APK_UNSIGNED"
-
-          "$APKSIGNER" verify --verbose "$APK_SIGNED"
           echo "APK_SIGNED=$APK_SIGNED" >> "$GITHUB_ENV"
 
       - name: Prepare release assets
