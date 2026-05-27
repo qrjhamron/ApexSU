@@ -18,9 +18,6 @@
 
 struct cred *ksu_cred;
 static atomic_t ksu_module_shutting_down = ATOMIC_INIT(0);
-#ifdef MODULE
-static struct list_head *ksu_module_prev;
-#endif
 
 extern void ksu_observer_exit(void);
 extern int ksu_pkg_observer_workqueue_init(void);
@@ -104,12 +101,12 @@ int __init kernelsu_init(void)
 
 #ifdef MODULE
 #ifndef CONFIG_KSU_DEBUG
-    ksu_module_prev = THIS_MODULE->list.prev;
+    /* list_del_rcu(THIS_MODULE->list) requires module_mutex which is not
+     * exported for external modules. kobject_del is sufficient to hide
+     * from /sys/module; /proc/modules will still show the module name
+     * in external module builds. In-tree builds can restore this.
+     */
     kobject_del(&THIS_MODULE->mkobj.kobj);
-    mutex_lock(&module_mutex);
-    list_del_rcu(&THIS_MODULE->list);
-    mutex_unlock(&module_mutex);
-    synchronize_rcu();
 #endif
 #endif
     return 0;
@@ -155,13 +152,6 @@ void kernelsu_exit(void)
         put_cred(ksu_cred);
     }
 
-#ifdef MODULE
-#ifndef CONFIG_KSU_DEBUG
-    mutex_lock(&module_mutex);
-    list_add_rcu(&THIS_MODULE->list, ksu_module_prev);
-    mutex_unlock(&module_mutex);
-#endif
-#endif
 }
 
 module_init(kernelsu_init);
@@ -174,6 +164,4 @@ MODULE_DESCRIPTION("Kernel Module");
 MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
 #else
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
-#endif
-_NOT_a_driver);
 #endif
