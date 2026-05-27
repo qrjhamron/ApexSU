@@ -8,17 +8,18 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/kprobes.h>
+#include <linux/random.h>
 #include <linux/syscalls.h>
 #include <linux/task_work.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
-#if IS_ENABLED(CONFIG_KUNIT)
+#include <linux/list.h>
+#if IS_ENABLED(CONFIG_KUNIT) && !defined(CONFIG_KSU_CI)
 #include <kunit/test.h>
 #endif
 
 #include "supercalls.h"
 #include "arch.h"
-#include "list.h"
 #include "feature.h"
 #include "klog.h" // IWYU pragma: keep
 #include "ksu.h"
@@ -30,6 +31,8 @@
 #include "syscall_hook_manager.h"
 
 // Permission check functions
+int install(void);
+
 bool only_manager(void)
 {
     return is_manager();
@@ -156,7 +159,7 @@ static int do_check_safemode(void __user *arg)
 
 /*
  * do_new_get_list_common - Retrieve the allow/deny list of UIDs.
- * @arg: userspace pointer to a ksu_new_get_list_cmd struct.
+ * @arg: userspace pointer to a ksu_new_get_allow_list_cmd struct.
  * @allow: if true, return allowed UIDs; if false, return denied UIDs.
  *
  * Copies the matching UID array back to userspace.
@@ -164,7 +167,7 @@ static int do_check_safemode(void __user *arg)
  */
 static int do_new_get_list_common(void __user *arg, bool allow)
 {
-    struct ksu_new_get_list_cmd cmd;
+    struct ksu_new_get_allow_list_cmd cmd;
     int *arr = NULL;
     int err = 0;
 
@@ -180,7 +183,7 @@ static int do_new_get_list_common(void __user *arg, bool allow)
     }
 
     bool success =
-        ksu_get_list(arr, cmd.count, &cmd.count, &cmd.total_count, allow);
+        ksu_get_allow_list(arr, cmd.count, &cmd.count, &cmd.total_count, allow);
 
     if (!success) {
         err = -EFAULT;
@@ -194,7 +197,7 @@ static int do_new_get_list_common(void __user *arg, bool allow)
     }
 
     if (cmd.count &&
-        copy_to_user(&((struct ksu_new_get_list_cmd *)arg)->uids, arr,
+        copy_to_user(&((struct ksu_new_get_allow_list_cmd *)arg)->uids, arr,
                      sizeof(int) * cmd.count)) {
         pr_err("new_get_list: copy_to_user uids failed\n");
         err = -EFAULT;
@@ -230,7 +233,7 @@ static int do_get_list_common(void __user *arg, bool allow)
         return -ENOMEM;
     }
 
-    bool success = ksu_get_list(arr, kSize, &count, NULL, allow);
+    bool success = ksu_get_allow_list(arr, kSize, &count, NULL, allow);
 
     if (!success) {
         err = -EFAULT;
@@ -239,7 +242,7 @@ static int do_get_list_common(void __user *arg, bool allow)
 
     out_count = count;
 
-    if (copy_to_user(arg + offsetof(struct ksu_get_list_cmd, count),
+    if (copy_to_user(arg + offsetof(struct ksu_get_allow_list_cmd, count),
                      &out_count, sizeof(u32))) {
         pr_err("get_list: copy_to_user count failed\n");
         err = -EFAULT;
@@ -270,7 +273,7 @@ static int do_get_list(void __user *arg)
 
 static int do_uid_granted(void __user *arg)
 {
-    struct ksu_uid_granted_cmd cmd;
+    struct ksu_uid_granted_root_cmd cmd;
 
     if (copy_from_user(&cmd, arg, sizeof(cmd))) {
         return -EFAULT;
@@ -306,9 +309,9 @@ static int do_uid_should_umount(void __user *arg)
 
 static int do_get_appid(void __user *arg)
 {
-    struct ksu_get_appid_cmd cmd;
+    struct ksu_get_manager_appid_cmd cmd;
 
-    cmd.appid = ksu_get_appid();
+    cmd.appid = ksu_get_manager_appid();
 
     if (copy_to_user(arg, &cmd, sizeof(cmd))) {
         pr_err("get_appid: copy_to_user failed\n");
@@ -351,7 +354,7 @@ static int do_set_app_profile(void __user *arg)
 
     ret = ksu_set_app_profile(&cmd.profile);
     if (!ret) {
-        ksu_persistent_list();
+        ksu_persistent_allow_list();
         ksu_mark_running_process();
     }
     return ret;
@@ -951,7 +954,7 @@ int install(void)
     return fd;
 }
 
-#if IS_ENABLED(CONFIG_KUNIT)
+#if IS_ENABLED(CONFIG_KUNIT) && !defined(CONFIG_KSU_CI)
 static void validate_cstr_path_accepts_absolute_path_test(struct kunit *test)
 {
     char path[] = "/data/adb/modules";

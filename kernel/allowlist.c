@@ -16,7 +16,7 @@
 #include <linux/types.h>
 #include <linux/version.h>
 #include <linux/compiler_types.h>
-#if IS_ENABLED(CONFIG_KUNIT)
+#if IS_ENABLED(CONFIG_KUNIT) && !defined(CONFIG_KSU_CI)
 #include <kunit/test.h>
 #endif
 
@@ -690,7 +690,7 @@ void ksu_allowlist_exit(void)
     mutex_unlock(&allowlist_mutex);
 }
 
-#if IS_ENABLED(CONFIG_KUNIT)
+#if IS_ENABLED(CONFIG_KUNIT) && !defined(CONFIG_KSU_CI)
 static void init_test_root_profile(struct app_profile *profile)
 {
     memset(profile, 0, sizeof(*profile));
