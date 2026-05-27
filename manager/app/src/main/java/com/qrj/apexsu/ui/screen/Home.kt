@@ -41,6 +41,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.rounded.CheckCircleOutline
@@ -203,14 +210,60 @@ fun HomePager(
     val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     val checkUpdate = prefs.getBoolean("check_update", true)
 
+    LaunchedEffect(Unit) {
+        (context as? android.app.Activity)?.window?.let { window ->
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        }
+    }
+
+    val listState = rememberLazyListState()
+    val showTopBar by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 }
+    }
+
     Scaffold(
-        topBar = { },
+        topBar = {
+            AnimatedVisibility(
+                visible = showTopBar,
+                enter = fadeIn(animationSpec = tween(200)),
+                exit = fadeOut(animationSpec = tween(200))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF000000))
+                ) {
+                    Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "ApexSU",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.W600,
+                            color = Color.White
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(Color(IOS_SEPARATOR))
+                    )
+                }
+            }
+        },
         popupHost = { },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxHeight()
+                .statusBarsPadding()
                 .scrollEndHaptic()
                 .overScrollVertical()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
@@ -220,6 +273,14 @@ fun HomePager(
             overscrollEffect = null,
         ) {
             item {
+                Text(
+                    text = "ApexSU",
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(start = 20.dp, top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 12.dp, bottom = 8.dp)
+                )
+
                 val isManager = Natives.isManager
                 val ksuVersion = if (isManager) Natives.version else null
                 val lkmMode = ksuVersion?.let {
@@ -232,9 +293,6 @@ fun HomePager(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    HomeBanner(
-                        onClickSettings = { mainState.animateToPage(3) }
-                    )
                     if (ksuVersion != null && !Natives.isLkmMode) {
                         WarningCard(stringResource(id = R.string.home_gki_warning))
                     }
@@ -323,59 +381,7 @@ fun UpdateCard() {
     }
 }
 
-@Composable
-private fun HomeBanner(
-    onClickSettings: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
-        insideMargin = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 20.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            androidx.compose.foundation.Image(
-                painter = androidx.compose.ui.res.painterResource(id = R.mipmap.ic_launcher_foreground),
-                contentDescription = "ApexSU",
-                modifier = Modifier.size(40.dp),
-            )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp),
-            ) {
-                Text(
-                    text = "ApexSU",
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.W700,
-                )
-                Text(
-                    text = "Root Manager",
-                    color = Color(IOS_SECONDARY),
-                    fontSize = 13.sp,
-                )
-            }
-            Card(
-                onClick = onClickSettings,
-                modifier = Modifier.size(36.dp),
-                colors = CardDefaults.defaultColors(color = colorScheme.surfaceContainer),
-                insideMargin = PaddingValues(0.dp),
-                cornerRadius = 18.dp,
-                showIndication = true,
-                pressFeedbackType = PressFeedbackType.Sink,
-            ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Settings, contentDescription = null, tint = Color.White)
-                }
-            }
-        }
-    }
-}
+
 
 @Composable
 private fun StatusCard(
