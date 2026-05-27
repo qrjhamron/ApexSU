@@ -22,6 +22,9 @@ manager/build/
 
 # Built native libraries (build from source)
 manager/app/src/main/jniLibs/
+!manager/app/src/main/jniLibs/
+!manager/app/src/main/jniLibs/arm64-v8a/
+!manager/app/src/main/jniLibs/arm64-v8a/libksud.so
 
 # Built binaries
 *.apk

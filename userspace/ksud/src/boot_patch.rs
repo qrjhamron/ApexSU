@@ -596,7 +596,7 @@ pub fn flash_patched_image(args: BootFlashArgs) -> Result<()> {
     println!("- patched_boot_output_path={}", image.display());
 
     let tmpdir = tempfile::Builder::new()
-        .prefix("KernelSU")
+        .prefix("ApexSU")
         .tempdir()
         .context("create temp dir failed")?;
     let workdir = tmpdir.path();
@@ -655,7 +655,7 @@ pub fn patch(args: BootPatchArgs) -> Result<()> {
         }
 
         let tmpdir = tempfile::Builder::new()
-            .prefix("KernelSU")
+            .prefix("ApexSU")
             .tempdir()
             .context("create temp dir failed")?;
         let workdir = tmpdir.path();
@@ -756,7 +756,7 @@ pub fn patch(args: BootPatchArgs) -> Result<()> {
         let is_magisk_patched = is_magisk_patched(&magiskboot, workdir, ramdisk)?;
         ensure!(!is_magisk_patched, "Cannot work with Magisk patched image");
 
-        println!("- Adding KernelSU LKM");
+        println!("- Adding ApexSU LKM");
         let is_kernelsu_patched = is_kernelsu_patched(&magiskboot, workdir, ramdisk)?;
 
         if !is_kernelsu_patched {
@@ -861,7 +861,7 @@ pub fn restore(args: BootRestoreArgs) -> Result<()> {
     let BootRestoreArgs { flash, .. } = args;
 
     let tmpdir = tempfile::Builder::new()
-        .prefix("KernelSU")
+        .prefix("ApexSU")
         .tempdir()
         .context("create temp dir failed")?;
     let workdir = tmpdir.path();

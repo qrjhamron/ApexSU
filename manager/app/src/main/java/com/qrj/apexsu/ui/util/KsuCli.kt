@@ -28,9 +28,65 @@ import java.io.File
  * @date 2023/1/1.
  */
 private const val TAG = "KsuCli"
+private const val NATIVE_HELPER_MISSING =
+    "ApexSU native helper missing. Reinstall the official arm64 APK."
 
-private fun getKsuDaemonPath(): String {
-    return ksuApp.applicationInfo.nativeLibraryDir + File.separator + "libksud.so"
+internal fun resolveNativeKsudHelper(nativeLibraryDir: String): File {
+    return File(nativeLibraryDir, "libksud.so")
+}
+
+internal fun prepareExecutableKsudHelper(
+    nativeHelper: File,
+    codeCacheDir: File,
+    onLog: (String) -> Unit
+): File {
+    onLog("resolved_libksud_path=${nativeHelper.absolutePath}")
+    onLog("libksud_exists=${nativeHelper.exists()}")
+    onLog("libksud_can_read=${nativeHelper.canRead()}")
+    onLog("libksud_can_execute=${nativeHelper.canExecute()}")
+
+    if (!nativeHelper.exists() || !nativeHelper.canRead()) {
+        throw IllegalStateException(NATIVE_HELPER_MISSING)
+    }
+
+    val executableHelper = File(codeCacheDir, "apexsu/libksud.so")
+    executableHelper.parentFile?.mkdirs()
+
+    val shouldCopy = !executableHelper.exists() ||
+        executableHelper.length() != nativeHelper.length() ||
+        executableHelper.lastModified() < nativeHelper.lastModified()
+    if (shouldCopy) {
+        nativeHelper.copyTo(executableHelper, overwrite = true)
+    }
+
+    executableHelper.setReadable(true, false)
+    executableHelper.setWritable(true, true)
+    executableHelper.setExecutable(true, false)
+
+    onLog("copied_helper_path=${executableHelper.absolutePath}")
+    onLog("copied_helper_exists=${executableHelper.exists()}")
+    onLog("copied_helper_can_read=${executableHelper.canRead()}")
+    onLog("copied_helper_can_execute=${executableHelper.canExecute()}")
+
+    if (!executableHelper.exists() || !executableHelper.canRead() || !executableHelper.canExecute()) {
+        throw IllegalStateException(NATIVE_HELPER_MISSING)
+    }
+
+    return executableHelper
+}
+
+private fun getKsuDaemonPath(onLog: ((String) -> Unit)? = null): String {
+    val nativeLibraryDir = ksuApp.applicationInfo.nativeLibraryDir
+    onLog?.invoke("nativeLibraryDir=$nativeLibraryDir")
+    val nativeHelper = resolveNativeKsudHelper(nativeLibraryDir)
+    return prepareExecutableKsudHelper(
+        nativeHelper = nativeHelper,
+        codeCacheDir = ksuApp.codeCacheDir,
+        onLog = { line ->
+            onLog?.invoke(line)
+            Log.i(TAG, line)
+        }
+    ).absolutePath
 }
 
 data class FlashResult(
@@ -305,7 +361,7 @@ fun patchBootImage(
     when (lkm) {
         is LkmSelection.LkmUri -> {
             lkmFile = with(resolver.openInputStream(lkm.uri)) {
-                val file = File(ksuApp.cacheDir, "kernelsu-tmp-lkm.ko")
+                val file = File(ksuApp.cacheDir, "apexsu-tmp-lkm.ko")
                 file.outputStream().use { output ->
                     this?.copyTo(output)
                 }
@@ -327,7 +383,13 @@ fun patchBootImage(
     cmd += " -o $downloadsDir"
     cmd += " --out-name ${outputFile.name}"
 
-    val result = flashWithIO("${getKsuDaemonPath()} $cmd", onStdout, onStderr)
+    val helperPath = try {
+        getKsuDaemonPath(onStdout)
+    } catch (e: IllegalStateException) {
+        onStderr(e.message ?: NATIVE_HELPER_MISSING)
+        return FlashResult(127, e.message ?: NATIVE_HELPER_MISSING, false)
+    }
+    val result = flashWithIO("$helperPath $cmd", onStdout, onStderr)
     Log.i("ApexSU", "patch boot result: ${result.isSuccess}")
 
     bootFile.delete()
@@ -361,7 +423,7 @@ fun installBoot(
     when (lkm) {
         is LkmSelection.LkmUri -> {
             lkmFile = with(resolver.openInputStream(lkm.uri)) {
-                val file = File(ksuApp.cacheDir, "kernelsu-tmp-lkm.ko")
+                val file = File(ksuApp.cacheDir, "apexsu-tmp-lkm.ko")
                 file.outputStream().use { output ->
                     this?.copyTo(output)
                 }
