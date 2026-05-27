@@ -8,9 +8,11 @@ import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -49,6 +51,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -101,6 +104,9 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private val FlashBg = Color(0xFF1C1C1E)
+private val FlashCard = Color(0xFF2C2C2E)
 
 /**
  * @author weishu
@@ -334,6 +340,7 @@ fun FlashScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize(1f)
+                .background(FlashBg)
                 .scrollEndHaptic()
                 .let { if (enableBlur) it.hazeSource(state = hazeState) else it }
                 .padding(
@@ -346,6 +353,25 @@ fun FlashScreen(
                 scrollState.animateScrollTo(scrollState.maxValue)
             }
             Spacer(Modifier.height(innerPadding.calculateTopPadding()))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .background(FlashCard)
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    text = stringResource(R.string.install_banner_title),
+                    color = Color.White
+                )
+            }
             Text(
                 modifier = Modifier.padding(8.dp),
                 text = stringResource(R.string.flash_elapsed, elapsed),
@@ -357,14 +383,17 @@ fun FlashScreen(
                 modifier = Modifier
                     .padding(8.dp)
                     .fillMaxWidth()
-                    .background(Color(0xFF07111F))
+                    .background(FlashCard, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
                     .padding(12.dp),
                 text = text.ifBlank { stringResource(R.string.flash_terminal_label) },
             )
             val outputPath = patchedBootPath
             if (flashing == FlashingStatus.SUCCESS && flashIt is FlashIt.PatchBoot && outputPath != null) {
                 Text(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .background(FlashCard, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                        .padding(8.dp),
                     text = stringResource(R.string.patch_success_output, outputPath),
                     color = colorScheme.onSurfaceVariantSummary,
                 )
