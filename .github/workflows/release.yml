@@ -18,71 +18,14 @@ env:
   ANDROID_API_LEVEL: "26"
 
 jobs:
-  build-kernel-module:
-    name: build-kernel-module
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Install kernel build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc \
-            make \
-            bc \
-            libssl-dev \
-            libelf-dev \
-            python3 \
-            curl \
-            xz-utils \
-            gcc-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu
-
-      - name: Download GKI 6.1 kernel source
-        run: |
-          set -euo pipefail
-          curl -fL --retry 6 --retry-all-errors --retry-delay 2 --connect-timeout 15 \
-            https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1.tar.gz \
-            -o "$RUNNER_TEMP/android14-6.1.tar.gz"
-          mkdir -p "$RUNNER_TEMP/kernel-src"
-          tar -xzf "$RUNNER_TEMP/android14-6.1.tar.gz" -C "$RUNNER_TEMP/kernel-src"
-          if [ ! -f "$RUNNER_TEMP/kernel-src/security/selinux/objsec.h" ] && [ -f "$RUNNER_TEMP/kernel-src/security/selinux/include/objsec.h" ]; then
-            ln -sf include/objsec.h "$RUNNER_TEMP/kernel-src/security/selinux/objsec.h"
-          fi
-          echo "KERNEL_SRC=$RUNNER_TEMP/kernel-src" >> "$GITHUB_ENV"
-
-      - name: Prepare kernel build tree
-        run: |
-          make -C "$KERNEL_SRC" ARCH=arm64 gki_defconfig
-          make -C "$KERNEL_SRC" \
-            ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            modules_prepare
-
-      - name: Build kernel module
-        run: |
-          PATH=/usr/sbin:/usr/bin:/sbin:/bin make -C kernel \
-            KDIR="$KERNEL_SRC" \
-            ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CONFIG_KSU=m \
-            CONFIG_KSU_CI=y
-          test -f kernel/kernelsu.ko
-
-      - name: Upload kernelsu.ko
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: kernelsu-ko
-          path: kernel/kernelsu.ko
-          if-no-files-found: error
+  build-kernel-modules:
+    name: build-kernel-modules
+    uses: ./.github/workflows/build-lkm.yml
 
   release-build:
     name: release-build
     runs-on: ubuntu-latest
-    needs: [build-kernel-module]
+    needs: [build-kernel-modules]
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -141,11 +84,12 @@ jobs:
       - name: Build ksuinit release binary
         run: cargo build --release --manifest-path userspace/ksuinit/Cargo.toml --target aarch64-linux-android
 
-      - name: Download kernelsu.ko artifact
+      - name: Download kernelsu.ko artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: kernelsu-ko
-          path: dist/
+          pattern: "*-lkm"
+          path: dist/lkm
+          merge-multiple: true
 
       - name: Decode signing keystore
         run: |
@@ -207,7 +151,11 @@ jobs:
         run: |
           mkdir -p dist
           cp "$APK_SIGNED" "dist/ApexSU-${GITHUB_REF_NAME}.apk"
-          cp dist/kernelsu.ko "dist/kernelsu-${GITHUB_REF_NAME}.ko"
+          cp dist/lkm/*_kernelsu.ko dist/
+          for ko in dist/*_kernelsu.ko; do
+            kmi="$(basename "$ko" | sed 's/_kernelsu\.ko$//')"
+            mv "$ko" "dist/kernelsu-${kmi}.ko"
+          done
           cp userspace/ksud/target/aarch64-linux-android/release/ksud "dist/ksud-aarch64-linux-android"
           cp userspace/ksuinit/target/aarch64-linux-android/release/ksuinit "dist/ksuinit-aarch64-linux-android"
 
@@ -239,6 +187,6 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
           files: |
             dist/ApexSU-${{ github.ref_name }}.apk
-            dist/kernelsu-${{ github.ref_name }}.ko
+            dist/kernelsu-*.ko
             dist/ksud-aarch64-linux-android
             dist/ksuinit-aarch64-linux-android
