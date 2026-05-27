@@ -222,11 +222,93 @@ fun HomePager(
     }
 
     Scaffold(
-        topBar = {
+        topBar = { },
+        popupHost = { },
+        contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
+    ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scrollEndHaptic()
+                    .overScrollVertical()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .padding(horizontal = 12.dp)
+                    .let { if (enableBlur) it.hazeSource(state = hazeState) else it },
+                contentPadding = innerPadding,
+                overscrollEffect = null,
+            ) {
+                item {
+                    Text(
+                        text = "ApexSU",
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(start = 20.dp, top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 12.dp, bottom = 8.dp)
+                    )
+                }
+                item {
+                    val isManager = Natives.isManager
+                    val ksuVersion = if (isManager) Natives.version else null
+                    val lkmMode = ksuVersion?.let {
+                        if (kernelVersion.isGKI()) Natives.isLkmMode else null
+                    }
+                    val mainState = LocalMainPagerState.current
+
+                    Column(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        if (ksuVersion != null && !Natives.isLkmMode) {
+                            WarningCard(stringResource(id = R.string.home_gki_warning))
+                        }
+                        if (isManager && Natives.requireNewKernel()) {
+                            WarningCard(
+                                stringResource(id = R.string.require_kernel_version)
+                                    .format(ksuVersion, Natives.MINIMAL_SUPPORTED_KERNEL),
+                            )
+                        }
+                        if (ksuVersion != null && !rootAvailable()) {
+                            WarningCard(stringResource(id = R.string.grant_root_failed))
+                        }
+                        StatusCard(
+                            kernelVersion, ksuVersion, lkmMode,
+                            onClickInstall = {
+                                navigator.push(Route.Install)
+                            },
+                            onClickLoadLkm = {
+                                selectLkmLauncher.launch("*/*")
+                            },
+                            onClickSuperuser = {
+                                mainState.animateToPage(1)
+                            },
+                            onclickModule = {
+                                mainState.animateToPage(2)
+                            },
+                            selectedKoName = homeViewModel.selectedKoDisplayName,
+                            autoDetectedKmiText = autoDetectedKmiText,
+                            autoDetectUnsupported = autoDetectUnsupported,
+                        )
+
+                        if (checkUpdate) {
+                            UpdateCard()
+                        }
+                        InfoCard()
+                        DeviceInfoCard()
+                        DonateCard()
+                        LearnMoreCard()
+                    }
+                    Spacer(Modifier.height(bottomInnerPadding))
+                }
+            }
+
             AnimatedVisibility(
                 visible = showTopBar,
                 enter = fadeIn(animationSpec = tween(200)),
-                exit = fadeOut(animationSpec = tween(200))
+                exit = fadeOut(animationSpec = tween(200)),
+                modifier = Modifier.align(Alignment.TopCenter)
             ) {
                 Column(
                     modifier = Modifier
@@ -254,85 +336,6 @@ fun HomePager(
                             .background(Color(IOS_SEPARATOR))
                     )
                 }
-            }
-        },
-        popupHost = { },
-        contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
-    ) { innerPadding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxHeight()
-                .statusBarsPadding()
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .padding(horizontal = 12.dp)
-                .let { if (enableBlur) it.hazeSource(state = hazeState) else it },
-            contentPadding = innerPadding,
-            overscrollEffect = null,
-        ) {
-            item {
-                Text(
-                    text = "ApexSU",
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.padding(start = 20.dp, top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 12.dp, bottom = 8.dp)
-                )
-
-                val isManager = Natives.isManager
-                val ksuVersion = if (isManager) Natives.version else null
-                val lkmMode = ksuVersion?.let {
-                    if (kernelVersion.isGKI()) Natives.isLkmMode else null
-                }
-                val mainState = LocalMainPagerState.current
-
-                Column(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    if (ksuVersion != null && !Natives.isLkmMode) {
-                        WarningCard(stringResource(id = R.string.home_gki_warning))
-                    }
-                    if (isManager && Natives.requireNewKernel()) {
-                        WarningCard(
-                            stringResource(id = R.string.require_kernel_version)
-                                .format(ksuVersion, Natives.MINIMAL_SUPPORTED_KERNEL),
-                        )
-                    }
-                    if (ksuVersion != null && !rootAvailable()) {
-                        WarningCard(stringResource(id = R.string.grant_root_failed))
-                    }
-                    StatusCard(
-                        kernelVersion, ksuVersion, lkmMode,
-                        onClickInstall = {
-                            navigator.push(Route.Install)
-                        },
-                        onClickLoadLkm = {
-                            selectLkmLauncher.launch("*/*")
-                        },
-                        onClickSuperuser = {
-                            mainState.animateToPage(1)
-                        },
-                        onclickModule = {
-                            mainState.animateToPage(2)
-                        },
-                        selectedKoName = homeViewModel.selectedKoDisplayName,
-                        autoDetectedKmiText = autoDetectedKmiText,
-                        autoDetectUnsupported = autoDetectUnsupported,
-                    )
-
-                    if (checkUpdate) {
-                        UpdateCard()
-                    }
-                    InfoCard()
-                    DeviceInfoCard()
-                    DonateCard()
-                    LearnMoreCard()
-                }
-                Spacer(Modifier.height(bottomInnerPadding))
             }
         }
     }
