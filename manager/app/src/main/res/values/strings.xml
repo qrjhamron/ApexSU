@@ -148,6 +148,9 @@
     <string name="flashing">Flashing</string>
     <string name="flash_success">Flash success</string>
     <string name="flash_failed">Flash failed</string>
+    <string name="patching">Patching</string>
+    <string name="patch_success">Patch success</string>
+    <string name="patch_failed">Patch failed</string>
     <string name="selected_lkm">Selected LKM: %s</string>
     <string name="save_log">Save logs</string>
     <string name="log_saved">Logs saved</string>
@@ -259,6 +262,7 @@
     <string name="learn_more">Learn more</string>
     <string name="flash_elapsed">Elapsed %s</string>
     <string name="flash_confirm_title">Confirm flash</string>
+    <string name="patch_confirm_title">Confirm patch boot image</string>
     <string name="flash_confirm_content">Target: %1$s\nBackup: %2$s\nEstimated time: %3$s</string>
     <string name="flash_target_current_slot">current slot</string>
     <string name="flash_target_inactive_slot">inactive slot</string>
@@ -266,6 +270,9 @@
     <string name="flash_backup_not_required">not required</string>
     <string name="flash_estimated_time_value">1-3 minutes</string>
     <string name="flash_terminal_label">Live terminal output</string>
+    <string name="patch_target_boot_image">Patching boot.img</string>
+    <string name="patch_success_output">Patched image written to:\n%s</string>
+    <string name="flash_patched_image">Flash patched image</string>
     <string name="log_saved_to">Log saved to %s</string>
     <string name="module_sort_name">Name</string>
     <string name="module_sort_install_date">Install date</string>
@@ -283,7 +290,7 @@
     <string name="home_load_lkm_manually">Load .ko manually</string>
     <string name="install_patch_local_boot_image">Patch a local boot image</string>
     <string name="install_select_boot_image">Select boot.img</string>
-    <string name="install_boot_step_indicator">Step 1 (Select) → Step 2 (Verify) → Step 3 (Flash)</string>
+    <string name="install_boot_step_indicator">Step 1 (Select) → Step 2 (Verify) → Step 3 (Patch)</string>
     <string name="install_load_lkm_manually">Load a kernel module manually</string>
     <string name="install_select_lkm_file">Select kernel module (.ko)</string>
     <string name="install_file_size">Size</string>
@@ -292,6 +299,7 @@
     <string name="install_reading_file_details">Reading file details...</string>
     <string name="install_reading_selected_file">Reading selected file...</string>
     <string name="flash_custom_boot_image">Flashing: %s</string>
+    <string name="patch_original_boot_image">Original boot image: %s</string>
     <string name="flash_auto_detected_boot_partition">Auto-detected boot partition: %s</string>
     <string name="flash_auto_detected_boot_partition_default">ksud default</string>
     <string name="settings_about_kernel_module_not_detected">Not detected</string>

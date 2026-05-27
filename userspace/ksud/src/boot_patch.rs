@@ -563,6 +563,57 @@ pub struct BootPatchArgs {
     pub out_name: Option<String>,
 }
 
+#[cfg(target_os = "android")]
+#[derive(clap::Args, Debug)]
+pub struct BootFlashArgs {
+    /// already patched boot image path to flash
+    #[arg(short, long)]
+    pub image: PathBuf,
+
+    /// flash to the inactive slot
+    #[arg(short = 'u', long, default_value = "false")]
+    pub ota: bool,
+
+    /// target partition override (init_boot | boot | vendor_boot)
+    #[arg(long, default_value = None)]
+    pub partition: Option<String>,
+}
+
+#[cfg(target_os = "android")]
+pub fn flash_patched_image(args: BootFlashArgs) -> Result<()> {
+    let BootFlashArgs {
+        image,
+        ota,
+        partition,
+    } = args;
+
+    ensure!(image.exists(), "patched image not found: {}", image.display());
+    ensure!(
+        image.file_name().and_then(|name| name.to_str()) != Some("boot.img"),
+        "refusing to flash original boot.img"
+    );
+
+    println!("- patched_boot_output_path={}", image.display());
+
+    let tmpdir = tempfile::Builder::new()
+        .prefix("KernelSU")
+        .tempdir()
+        .context("create temp dir failed")?;
+    let workdir = tmpdir.path();
+    let kmi = get_current_kmi().unwrap_or_else(|_| String::new());
+    let (_, bootdevice) = find_boot_image(&None, &kmi, ota, false, workdir, &partition)?;
+
+    println!("- Flashing patched boot image");
+    flash_boot(&bootdevice, image)?;
+
+    if ota {
+        post_ota()?;
+    }
+
+    println!("- Done!");
+    Ok(())
+}
+
 /// Core entry point for patching the boot image with KernelSU.
 pub fn patch(args: BootPatchArgs) -> Result<()> {
     let inner = move || {
@@ -747,7 +798,7 @@ pub fn patch(args: BootPatchArgs) -> Result<()> {
             let output_dir = out.unwrap_or(std::env::current_dir()?);
             let name = out_name.unwrap_or_else(|| {
                 let now = chrono::Utc::now();
-                format!("kernelsu_patched_{}.img", now.format("%Y%m%d_%H%M%S"))
+                format!("apexsu_patched_{}.img", now.format("%Y%m%d_%H%M%S"))
             });
             let output_image = output_dir.join(name);
             if std::fs::rename(&new_boot, &output_image).is_err() {

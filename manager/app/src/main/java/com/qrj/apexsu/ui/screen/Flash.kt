@@ -77,16 +77,20 @@ import com.qrj.apexsu.ui.theme.LocalEnableBlur
 import com.qrj.apexsu.ui.util.FlashResult
 import com.qrj.apexsu.ui.util.LkmSelection
 import com.qrj.apexsu.ui.util.flashModule
+import com.qrj.apexsu.ui.util.flashPatchedBootImage
 import com.qrj.apexsu.ui.util.installBoot
+import com.qrj.apexsu.ui.util.patchBootImage
 import com.qrj.apexsu.ui.util.reboot
 import com.qrj.apexsu.ui.util.restoreBoot
 import com.qrj.apexsu.ui.util.uninstallPermanently
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Share
@@ -133,6 +137,7 @@ fun FlashScreen(
     var text by rememberSaveable { mutableStateOf("") }
     val logContent = rememberSaveable { StringBuilder() }
     var showFloatAction by rememberSaveable { mutableStateOf(false) }
+    var patchedBootPath by rememberSaveable { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val enableBlur = LocalEnableBlur.current
@@ -164,38 +169,48 @@ fun FlashScreen(
         onConfirm = { confirmed = true },
         onDismiss = { navigator.pop() }
     )
-    val backupStatus = if (flashIt is FlashIt.FlashBoot) {
+    val backupStatus = if (flashIt is FlashIt.FlashBoot || flashIt is FlashIt.FlashPatchedBoot) {
         stringResource(R.string.flash_backup_required)
     } else {
         stringResource(R.string.flash_backup_not_required)
     }
     LaunchedEffect(flashIt) {
         val flashTarget = when (flashIt) {
+            is FlashIt.PatchBoot -> {
+                val details = withContext(Dispatchers.IO) {
+                    readBootImageDetails(context, flashIt.boot)
+                }
+                buildString {
+                    append(context.getString(R.string.patch_target_boot_image))
+                    append("\n")
+                    append(context.getString(R.string.patch_original_boot_image, details.displayName))
+                    append("\n")
+                    append(context.getString(R.string.install_file_size))
+                    append(": ")
+                    append(details.sizeBytes?.let(::formatFileSize) ?: context.getString(R.string.install_file_unavailable))
+                    append("\n")
+                    append(context.getString(R.string.install_file_sha256))
+                    append(": ")
+                    append(details.sha256 ?: context.getString(R.string.install_file_unavailable))
+                }
+            }
+
             is FlashIt.FlashBoot -> {
                 val slotTarget = context.getString(
                     if (flashIt.ota) R.string.flash_target_inactive_slot else R.string.flash_target_current_slot
                 )
-                flashIt.boot?.let { bootUri ->
-                    val details = withContext(Dispatchers.IO) {
-                        readBootImageDetails(context, bootUri)
-                    }
-                    buildString {
-                        append(context.getString(R.string.flash_custom_boot_image, details.displayName))
-                        append("\n")
-                        append(context.getString(R.string.install_file_size))
-                        append(": ")
-                        append(details.sizeBytes?.let(::formatFileSize) ?: context.getString(R.string.install_file_unavailable))
-                        append("\n")
-                        append(context.getString(R.string.install_file_sha256))
-                        append(": ")
-                        append(details.sha256 ?: context.getString(R.string.install_file_unavailable))
-                        append("\n")
-                        append(slotTarget)
-                    }
-                } ?: context.getString(
+                context.getString(
                     R.string.flash_auto_detected_boot_partition,
                     flashIt.partition ?: context.getString(R.string.flash_auto_detected_boot_partition_default)
-                )
+                ) + "\n" + slotTarget
+            }
+
+            is FlashIt.FlashPatchedBoot -> {
+                buildString {
+                    append(context.getString(R.string.flash_patched_image))
+                    append("\n")
+                    append(flashIt.patchedBootPath)
+                }
             }
 
             is FlashIt.FlashModules -> context.getString(R.string.module)
@@ -203,7 +218,13 @@ fun FlashScreen(
             FlashIt.FlashUninstall -> context.getString(R.string.settings_uninstall)
         }
         confirmDialog.showConfirm(
-            title = context.getString(R.string.flash_confirm_title),
+            title = context.getString(
+                if (flashIt is FlashIt.PatchBoot) {
+                    R.string.patch_confirm_title
+                } else {
+                    R.string.flash_confirm_title
+                }
+            ),
             content = context.getString(
                 R.string.flash_confirm_content,
                 flashTarget,
@@ -241,6 +262,7 @@ fun FlashScreen(
         if (result.code != 0) {
             text += "Error code: ${result.code}.\n ${result.err} Please save and check the log.\n"
         }
+        patchedBootPath = result.patchedBootPath
         if (result.showReboot) {
             text += "\n\n\n"
             showFloatAction = true
@@ -252,6 +274,7 @@ fun FlashScreen(
         topBar = {
             TopBar(
                 flashing,
+                patching = flashIt is FlashIt.PatchBoot,
                 onBack = dropUnlessResumed { navigator.pop() },
                 onSave = {
                     scope.launch {
@@ -338,6 +361,33 @@ fun FlashScreen(
                     .padding(12.dp),
                 text = text.ifBlank { stringResource(R.string.flash_terminal_label) },
             )
+            val outputPath = patchedBootPath
+            if (flashing == FlashingStatus.SUCCESS && flashIt is FlashIt.PatchBoot && outputPath != null) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    text = stringResource(R.string.patch_success_output, outputPath),
+                    color = colorScheme.onSurfaceVariantSummary,
+                )
+                TextButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    text = stringResource(R.string.flash_patched_image),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    onClick = {
+                        navigator.push(
+                            com.qrj.apexsu.ui.navigation3.Route.Flash(
+                                FlashIt.FlashPatchedBoot(
+                                    patchedBootPath = outputPath,
+                                    originalBootPath = flashIt.boot.toString(),
+                                    ota = false,
+                                    partition = null
+                                )
+                            )
+                        )
+                    }
+                )
+            }
             Spacer(
                 Modifier.height(
                     12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
@@ -388,9 +438,22 @@ private fun TerminalLogText(
 @Parcelize
 sealed class FlashIt : Parcelable {
     @Parcelize
+    data class PatchBoot(
+        val boot: Uri,
+        val lkm: LkmSelection
+    ) : FlashIt()
+
+    @Parcelize
     data class FlashBoot(
-        val boot: Uri? = null,
         val lkm: LkmSelection,
+        val ota: Boolean,
+        val partition: String? = null
+    ) : FlashIt()
+
+    @Parcelize
+    data class FlashPatchedBoot(
+        val patchedBootPath: String,
+        val originalBootPath: String?,
         val ota: Boolean,
         val partition: String? = null
     ) : FlashIt()
@@ -411,9 +474,24 @@ fun flashIt(
     onStderr: (String) -> Unit
 ): FlashResult {
     return when (flashIt) {
-        is FlashIt.FlashBoot -> installBoot(
+        is FlashIt.PatchBoot -> patchBootImage(
             flashIt.boot,
             flashIt.lkm,
+            onStdout,
+            onStderr
+        )
+
+        is FlashIt.FlashBoot -> installBoot(
+            flashIt.lkm,
+            flashIt.ota,
+            flashIt.partition,
+            onStdout,
+            onStderr
+        )
+
+        is FlashIt.FlashPatchedBoot -> flashPatchedBootImage(
+            flashIt.patchedBootPath,
+            flashIt.originalBootPath,
             flashIt.ota,
             flashIt.partition,
             onStdout,
@@ -501,6 +579,7 @@ private fun formatFileSize(sizeBytes: Long): String {
 @Composable
 private fun TopBar(
     status: FlashingStatus,
+    patching: Boolean,
     onBack: () -> Unit = {},
     onSave: () -> Unit = {},
     hazeState: HazeState,
@@ -518,10 +597,18 @@ private fun TopBar(
             Modifier
         },
         title = stringResource(
-            when (status) {
-                FlashingStatus.FLASHING -> R.string.flashing
-                FlashingStatus.SUCCESS -> R.string.flash_success
-                FlashingStatus.FAILED -> R.string.flash_failed
+            if (patching) {
+                when (status) {
+                    FlashingStatus.FLASHING -> R.string.patching
+                    FlashingStatus.SUCCESS -> R.string.patch_success
+                    FlashingStatus.FAILED -> R.string.patch_failed
+                }
+            } else {
+                when (status) {
+                    FlashingStatus.FLASHING -> R.string.flashing
+                    FlashingStatus.SUCCESS -> R.string.flash_success
+                    FlashingStatus.FAILED -> R.string.flash_failed
+                }
             }
         ),
         color = if (enableBlur) Color.Transparent else colorScheme.surface,

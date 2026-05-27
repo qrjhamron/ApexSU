@@ -131,7 +131,6 @@ fun HomePager(
                 navigator.push(
                     Route.Flash(
                         FlashIt.FlashBoot(
-                            boot = null,
                             lkm = LkmSelection.LkmUri(uri),
                             ota = false,
                             partition = null

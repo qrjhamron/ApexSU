@@ -168,12 +168,19 @@ fun InstallScreen() {
         installMethod?.let { method ->
             val isOta = method is InstallMethod.DirectInstallToInactiveSlot
             val partitionSelection = partitionsState.getOrNull(partitionSelectionIndex)
-            val flashIt = FlashIt.FlashBoot(
-                boot = if (method is InstallMethod.SelectFile) method.uri else null,
-                lkm = lkmSelection,
-                ota = isOta,
-                partition = partitionSelection
-            )
+            val flashIt = if (method is InstallMethod.SelectFile) {
+                val bootUri = method.uri ?: return@let
+                FlashIt.PatchBoot(
+                    boot = bootUri,
+                    lkm = lkmSelection
+                )
+            } else {
+                FlashIt.FlashBoot(
+                    lkm = lkmSelection,
+                    ota = isOta,
+                    partition = partitionSelection
+                )
+            }
             navigator.push(Route.Flash(flashIt))
         }
     }

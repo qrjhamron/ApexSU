@@ -33,7 +33,12 @@ private fun getKsuDaemonPath(): String {
     return ksuApp.applicationInfo.nativeLibraryDir + File.separator + "libksud.so"
 }
 
-data class FlashResult(val code: Int, val err: String, val showReboot: Boolean) {
+data class FlashResult(
+    val code: Int,
+    val err: String,
+    val showReboot: Boolean,
+    val patchedBootPath: String? = null
+) {
     constructor(result: Shell.Result, showReboot: Boolean) : this(result.code, result.err.joinToString("\n"), showReboot)
     constructor(result: Shell.Result) : this(result, result.isSuccess)
 }
@@ -263,17 +268,16 @@ sealed class LkmSelection : Parcelable {
     data object KmiNone : LkmSelection()
 }
 
-fun installBoot(
+fun patchBootImage(
     bootUri: Uri?,
     lkm: LkmSelection,
-    ota: Boolean,
-    partition: String?,
     onStdout: (String) -> Unit,
     onStderr: (String) -> Unit,
 ): FlashResult {
+    requireNotNull(bootUri) { "bootUri is required for patch-only flow" }
     val resolver = ksuApp.contentResolver
 
-    val bootFile = bootUri?.let { uri ->
+    val bootFile = bootUri.let { uri ->
         with(resolver.openInputStream(uri)) {
             val bootFile = File(ksuApp.cacheDir, "boot.img")
             bootFile.outputStream().use { output ->
@@ -285,14 +289,69 @@ fun installBoot(
     }
 
     val magiskboot = File(ksuApp.applicationInfo.nativeLibraryDir, "libmagiskboot.so")
-    var cmd = "boot-patch --magiskboot ${magiskboot.absolutePath}"
+    val downloadsDir =
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+        .format(java.util.Date())
+    val outputFile = File(downloadsDir, "apexsu_patched_${timestamp}.img")
 
-    cmd += if (bootFile == null) {
-        // no boot.img, use -f to force install
-        " -f"
-    } else {
-        " -b ${bootFile.absolutePath}"
+    onStdout("original_boot_path=$bootUri")
+    onStdout("patched_boot_output_path=${outputFile.absolutePath}")
+
+    var cmd = "boot-patch --magiskboot ${magiskboot.absolutePath}"
+    cmd += " -b ${bootFile.absolutePath}"
+
+    var lkmFile: File? = null
+    when (lkm) {
+        is LkmSelection.LkmUri -> {
+            lkmFile = with(resolver.openInputStream(lkm.uri)) {
+                val file = File(ksuApp.cacheDir, "kernelsu-tmp-lkm.ko")
+                file.outputStream().use { output ->
+                    this?.copyTo(output)
+                }
+
+                file
+            }
+            cmd += " -m ${lkmFile.absolutePath}"
+        }
+
+        is LkmSelection.KmiString -> {
+            cmd += " --kmi ${lkm.value}"
+        }
+
+        LkmSelection.KmiNone -> {
+            // do nothing
+        }
     }
+
+    cmd += " -o $downloadsDir"
+    cmd += " --out-name ${outputFile.name}"
+
+    val result = flashWithIO("${getKsuDaemonPath()} $cmd", onStdout, onStderr)
+    Log.i("ApexSU", "patch boot result: ${result.isSuccess}")
+
+    bootFile.delete()
+    lkmFile?.delete()
+
+    if (result.isSuccess && !outputFile.exists()) {
+        return FlashResult(1, "patched image was not created: ${outputFile.absolutePath}", false)
+    }
+
+    return FlashResult(result, showReboot = false).copy(
+        patchedBootPath = outputFile.absolutePath.takeIf { result.isSuccess }
+    )
+}
+
+fun installBoot(
+    lkm: LkmSelection,
+    ota: Boolean,
+    partition: String?,
+    onStdout: (String) -> Unit,
+    onStderr: (String) -> Unit,
+): FlashResult {
+    val resolver = ksuApp.contentResolver
+    val magiskboot = File(ksuApp.applicationInfo.nativeLibraryDir, "libmagiskboot.so")
+    var cmd = "boot-patch --magiskboot ${magiskboot.absolutePath} -f"
 
     if (ota) {
         cmd += " -u"
@@ -321,7 +380,6 @@ fun installBoot(
         }
     }
 
-    // output dir
     val downloadsDir =
         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
     cmd += " -o $downloadsDir"
@@ -333,15 +391,48 @@ fun installBoot(
     val result = flashWithIO("${getKsuDaemonPath()} $cmd", onStdout, onStderr)
     Log.i("ApexSU", "install boot result: ${result.isSuccess}")
 
-    bootFile?.delete()
     lkmFile?.delete()
 
-    // if boot uri is empty, it is direct install, when success, we should show reboot button
-    val showReboot = bootUri == null && result.isSuccess // we create a temporary val here, to avoid calc showReboot double
-    if (showReboot) { // because we decide do not update ksud when startActivity
+    if (result.isSuccess) {
         install() // install ksud here
     }
-    return FlashResult(result, showReboot)
+    return FlashResult(result, result.isSuccess)
+}
+
+fun flashPatchedBootImage(
+    patchedBootPath: String,
+    originalBootPath: String?,
+    ota: Boolean,
+    partition: String?,
+    onStdout: (String) -> Unit,
+    onStderr: (String) -> Unit,
+): FlashResult {
+    val patchedBoot = File(patchedBootPath)
+    onStdout("original_boot_path=${originalBootPath.orEmpty()}")
+    onStdout("patched_boot_output_path=${patchedBoot.absolutePath}")
+
+    if (!patchedBoot.exists()) {
+        return FlashResult(1, "patched image path does not exist: ${patchedBoot.absolutePath}", false)
+    }
+    if (patchedBoot.name == "boot.img" || originalBootPath == patchedBoot.absolutePath) {
+        return FlashResult(1, "refusing to flash original boot.img", false)
+    }
+
+    var cmd = "boot-flash -i ${patchedBoot.absolutePath}"
+    if (ota) {
+        cmd += " -u"
+    }
+    partition?.let { part ->
+        cmd += " --partition $part"
+    }
+
+    val result = flashWithIO("${getKsuDaemonPath()} $cmd", onStdout, onStderr)
+    Log.i("ApexSU", "flash patched boot result: ${result.isSuccess}")
+
+    if (result.isSuccess) {
+        install()
+    }
+    return FlashResult(result, result.isSuccess)
 }
 
 fun reboot(reason: String = "") {

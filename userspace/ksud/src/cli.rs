@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use android_logger::Config;
 use log::LevelFilter;
 
-use crate::boot_patch::{BootPatchArgs, BootRestoreArgs};
+use crate::boot_patch::{BootFlashArgs, BootPatchArgs, BootRestoreArgs};
 use crate::{
     apk_sign, assets, debug, defs, diagnostics, init_event, ksucalls, module, module_config, utils,
 };
@@ -70,6 +70,9 @@ enum Commands {
 
     /// Patch boot or init_boot images to apply KernelSU
     BootPatch(BootPatchArgs),
+
+    /// Flash an already patched boot or init_boot image
+    BootFlash(BootFlashArgs),
 
     /// Restore boot or init_boot images patched by KernelSU
     BootRestore(BootRestoreArgs),
@@ -597,6 +600,8 @@ pub fn run() -> Result<()> {
         },
 
         Commands::BootPatch(boot_patch) => crate::boot_patch::patch(boot_patch),
+
+        Commands::BootFlash(boot_flash) => crate::boot_patch::flash_patched_image(boot_flash),
 
         Commands::BootInfo { command } => match command {
             BootInfo::CurrentKmi => {
