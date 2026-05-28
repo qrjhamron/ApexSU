@@ -1,7 +1,6 @@
 package com.qrj.apexsu.ui.screen
 
 import android.util.Log
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +26,7 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.NewReleases
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -36,10 +36,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.FixedScale
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -155,10 +153,11 @@ fun AboutScreen() {
                             .clip(ContinuousRoundedRectangle(16.dp))
                             .background(Color.White)
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                            contentDescription = "icon",
-                            contentScale = FixedScale(1f)
+                        Icon(
+                            imageVector = Icons.Outlined.Security,
+                            contentDescription = stringResource(id = R.string.app_name),
+                            tint = Color(0xFF0A84FF),
+                            modifier = Modifier.size(48.dp),
                         )
                     }
                     Text(

@@ -54,6 +54,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -80,11 +81,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.FixedScale
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
@@ -1014,10 +1013,11 @@ fun ModulePager(
                                 .size(100.dp)
                                 .background(Color.White)
                         )
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        Icon(
+                            imageVector = Icons.Outlined.Extension,
                             contentDescription = null,
-                            contentScale = FixedScale(1.5f)
+                            tint = Color(0xFF0A84FF),
+                            modifier = Modifier.size(64.dp),
                         )
                     }
                 }
@@ -1206,11 +1206,22 @@ private fun ModuleList(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    stringResource(R.string.module_empty),
-                    textAlign = TextAlign.Center,
-                    color = Color.Gray,
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Extension,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(64.dp),
+                    )
+                    Text(
+                        stringResource(R.string.module_empty),
+                        textAlign = TextAlign.Center,
+                        color = Color.Gray,
+                    )
+                }
             }
         }
 
@@ -1361,6 +1372,12 @@ fun ModuleItem(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(
+                imageVector = Icons.Outlined.Extension,
+                contentDescription = null,
+                tint = colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier.size(24.dp),
+            )
             Column(
                 modifier = Modifier
                     .weight(1f)

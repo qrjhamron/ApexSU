@@ -29,8 +29,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.rounded.AccountCircle
-import androidx.compose.material.icons.rounded.Security
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -450,7 +450,7 @@ private fun AppProfileInner(
             SuperSwitch(
                 startAction = {
                     Icon(
-                        imageVector = Icons.Rounded.Security,
+                        imageVector = Icons.Outlined.Security,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = colorScheme.onBackground

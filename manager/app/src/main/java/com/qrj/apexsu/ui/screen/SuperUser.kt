@@ -35,6 +35,8 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -341,6 +343,12 @@ fun SuperUserPager(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Security,
+                                contentDescription = null,
+                                tint = colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.size(64.dp),
+                            )
                             Text(
                                 text = stringResource(R.string.superuser_empty_title),
                                 fontWeight = FontWeight.SemiBold,

@@ -4,15 +4,17 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.system.Os
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,15 +30,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -51,10 +57,18 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.dropUnlessResumed
+import com.qrj.apexsu.R
+import com.qrj.apexsu.ksuApp
+import com.qrj.apexsu.ui.navigation3.LocalNavigator
+import com.qrj.apexsu.ui.navigation3.Route
+import com.qrj.apexsu.ui.theme.LocalEnableBlur
+import com.qrj.apexsu.ui.util.LkmSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -63,23 +77,10 @@ import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.qrj.apexsu.R
-import com.qrj.apexsu.getKernelVersion
-import com.qrj.apexsu.ui.component.ChooseKmiDialog
-import com.qrj.apexsu.ui.component.rememberConfirmDialog
-import com.qrj.apexsu.ui.navigation3.LocalNavigator
-import com.qrj.apexsu.ui.navigation3.Route
-import com.qrj.apexsu.ui.theme.LocalEnableBlur
-import com.qrj.apexsu.ui.util.LkmSelection
-import com.qrj.apexsu.ui.util.getAvailablePartitions
-import com.qrj.apexsu.ui.util.getCurrentKmi
-import com.qrj.apexsu.ui.util.getDefaultPartition
-import com.qrj.apexsu.ui.util.getSlotSuffix
-import com.qrj.apexsu.ui.util.isAbDevice
-import com.qrj.apexsu.ui.util.rootAvailable
+import okhttp3.Request
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -88,21 +89,53 @@ import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.extra.SuperCheckbox
-import top.yukonga.miuix.kmp.extra.SuperDropdown
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
-import top.yukonga.miuix.kmp.icon.extended.ConvertFile
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
 import java.util.Locale
 
-/**
- * @author weishu
- * @date 2024/3/12.
- */
+private const val IOS_BLUE = 0xFF0A84FF
+private const val IOS_SECONDARY = 0xFF8E8E93
+private const val IOS_SEPARATOR = 0xFF38383A
+
+private enum class LkmInstallOption {
+    Local,
+    Repository
+}
+
+internal data class RepoLkmInfo(
+    val key: String,
+    val fileName: String,
+    val displayVersion: String,
+    val downloadUrl: String,
+)
+
+internal fun detectRepoLkmInfo(release: String): RepoLkmInfo? {
+    val androidMatch = Regex("android(\\d+)").find(release)?.groupValues?.getOrNull(1)
+    val kernelMatch = Regex("(\\d+\\.\\d+)").find(release)?.groupValues?.getOrNull(1)
+    val key = if (androidMatch != null && kernelMatch != null) "android$androidMatch-$kernelMatch" else return null
+    val fileName = when (key) {
+        "android12-5.10", "android13-5.10" -> "kernelsu-5.10.209-arm64.ko"
+        "android13-5.15", "android14-5.15" -> "kernelsu-5.15.148-arm64.ko"
+        "android14-6.1" -> "kernelsu-6.1.96-arm64.ko"
+        "android15-6.6" -> "kernelsu-6.6.35-arm64.ko"
+        "android16-6.12" -> "kernelsu-6.12.6-arm64.ko"
+        else -> null
+    } ?: return null
+
+    return RepoLkmInfo(
+        key = key,
+        fileName = fileName,
+        displayVersion = fileName.removePrefix("kernelsu-"),
+        downloadUrl = "https://github.com/qrjhamron/ApexSU/releases/latest/download/$fileName"
+    )
+}
+
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun InstallScreen() {
@@ -110,9 +143,6 @@ fun InstallScreen() {
     val context = LocalContext.current
     val enableBlur = LocalEnableBlur.current
     val scope = rememberCoroutineScope()
-    var installMethod by remember {
-        mutableStateOf<InstallMethod?>(null)
-    }
 
     var selectedBootUriString by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedBootUri = selectedBootUriString?.let(Uri::parse)
@@ -127,9 +157,8 @@ fun InstallScreen() {
         }
     }
 
-    var lkmSelection by rememberSaveable {
-        mutableStateOf<LkmSelection>(LkmSelection.KmiNone)
-    }
+    var lkmOption by rememberSaveable { mutableStateOf(LkmInstallOption.Repository) }
+    var lkmSelection by rememberSaveable { mutableStateOf<LkmSelection>(LkmSelection.KmiNone) }
     val selectedLkmUriString = (lkmSelection as? LkmSelection.LkmUri)?.uri?.toString()
     val selectedLkmLabel by produceState<String?>(
         initialValue = null,
@@ -141,105 +170,95 @@ fun InstallScreen() {
             getUriDisplayLabel(context, uri)
         }
     }
-    LaunchedEffect(selectedBootUriString) {
-        val uri = selectedBootUriString?.let(Uri::parse)
-        if (uri != null && installMethod == null) {
-            installMethod = InstallMethod.SelectFile(uri = uri, summary = null)
+    val repoLkmInfo = remember { detectRepoLkmInfo(Os.uname().release) }
+    var isDownloadingRepoLkm by rememberSaveable { mutableStateOf(false) }
+    var repoDownloadProgress by rememberSaveable { mutableFloatStateOf(0f) }
+
+    val selectBootLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        selectedBootUriString = uri.toString()
+    }
+
+    val selectLkmLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val isKo = withContext(Dispatchers.IO) {
+                isKoFile(context, uri)
+            }
+            if (isKo) {
+                lkmOption = LkmInstallOption.Local
+                lkmSelection = LkmSelection.LkmUri(uri)
+            } else {
+                lkmSelection = LkmSelection.KmiNone
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.install_only_support_ko_file),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
-    val hasRoot = rootAvailable()
-    val abDevice = produceState(initialValue = false) {
-        value = isAbDevice()
-    }.value
-    val gkiDevice = produceState(initialValue = false) {
-        value = getKernelVersion().isGKI()
-    }.value
-    val directInstallMethods = mutableListOf<InstallMethod>()
-    if (hasRoot && gkiDevice) {
-        directInstallMethods.add(InstallMethod.DirectInstall)
-        if (abDevice) {
-            directInstallMethods.add(InstallMethod.DirectInstallToInactiveSlot)
-        }
-    }
-
-    var partitionSelectionIndex by remember { mutableIntStateOf(0) }
-    var partitionsState by remember { mutableStateOf<List<String>>(emptyList()) }
-    var hasCustomSelected by remember { mutableStateOf(false) }
-
-    val onInstall = {
-        installMethod?.let { method ->
-            val isOta = method is InstallMethod.DirectInstallToInactiveSlot
-            val partitionSelection = partitionsState.getOrNull(partitionSelectionIndex)
-            val flashIt = if (method is InstallMethod.SelectFile) {
-                val bootUri = method.uri ?: return@let
+    fun startPatch(bootUri: Uri, lkm: LkmSelection) {
+        navigator.push(
+            Route.Flash(
                 FlashIt.PatchBoot(
                     boot = bootUri,
-                    lkm = lkmSelection
+                    lkm = lkm
                 )
-            } else {
-                FlashIt.FlashBoot(
-                    lkm = lkmSelection,
-                    ota = isOta,
-                    partition = partitionSelection
-                )
-            }
-            navigator.push(Route.Flash(flashIt))
-        }
+            )
+        )
     }
 
-    val currentKmi by produceState(initialValue = "") { value = getCurrentKmi() }
-
-    val showChooseKmiDialog = rememberSaveable { mutableStateOf(false) }
-    val chooseKmiDialog = ChooseKmiDialog(showChooseKmiDialog) { kmi ->
-        kmi?.let {
-            lkmSelection = LkmSelection.KmiString(it)
-            onInstall()
-        }
-    }
-
-    val onClickNext = {
-        val isLkmSelected = lkmSelection != LkmSelection.KmiNone
-        val isKmiUnknown = currentKmi.isBlank()
-        val isSelectFileMode = installMethod is InstallMethod.SelectFile
-        if (!isLkmSelected && (isKmiUnknown || isSelectFileMode)) {
-            // no lkm file selected and cannot get current kmi or select file mode
-            showChooseKmiDialog.value = true
-            chooseKmiDialog
-        } else {
-            onInstall()
-        }
-    }
-
-    val selectBootLauncher =
-        rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri ->
-            if (uri == null) return@rememberLauncherForActivityResult
-            selectedBootUriString = uri.toString()
-            installMethod = InstallMethod.SelectFile(uri = uri, summary = null)
-        }
-
-    val selectLkmLauncher =
-        rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri ->
-            if (uri == null) return@rememberLauncherForActivityResult
-            scope.launch {
-                val isKo = withContext(Dispatchers.IO) {
-                    isKoFile(context, uri)
+    fun onInstallClick() {
+        val bootUri = selectedBootUri ?: return
+        when (lkmOption) {
+            LkmInstallOption.Local -> {
+                val localLkm = lkmSelection as? LkmSelection.LkmUri
+                if (localLkm == null) {
+                    selectLkmLauncher.launch("*/*")
+                    return
                 }
-                if (isKo) {
-                    lkmSelection = LkmSelection.LkmUri(uri)
-                } else {
-                    lkmSelection = LkmSelection.KmiNone
+                startPatch(bootUri, localLkm)
+            }
+
+            LkmInstallOption.Repository -> {
+                val info = repoLkmInfo
+                if (info == null) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.install_only_support_ko_file),
+                        context.getString(R.string.install_repo_lkm_not_detected),
                         Toast.LENGTH_SHORT
                     ).show()
+                    return
+                }
+                scope.launch {
+                    isDownloadingRepoLkm = true
+                    repoDownloadProgress = 0f
+                    val result = runCatching {
+                        downloadRepoLkm(context, info) { progress ->
+                            repoDownloadProgress = progress
+                        }
+                    }
+                    isDownloadingRepoLkm = false
+                    result.onSuccess { uri ->
+                        lkmSelection = LkmSelection.LkmUri(uri)
+                        startPatch(bootUri, LkmSelection.LkmUri(uri))
+                    }.onFailure {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.install_repo_lkm_download_failed),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             }
         }
-
-    val onBootUpload = { selectBootLauncher.launch("*/*") }
-    val onLkmUpload = { selectLkmLauncher.launch("*/*") }
+    }
 
     val scrollBehavior = MiuixScrollBehavior()
     val hazeState = remember { HazeState() }
@@ -278,131 +297,44 @@ fun InstallScreen() {
             overscrollEffect = null,
         ) {
             item {
-                if (directInstallMethods.isNotEmpty()) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth(),
-                    ) {
-                        SelectInstallMethod(
-                            options = directInstallMethods,
-                            selectedOption = installMethod,
-                            onSelected = { method ->
-                                installMethod = method
-                            }
-                        )
-                    }
-                }
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    onClick = onBootUpload
-                ) {
-                    val bootDetailsText = selectedBootDetails?.let { details ->
-                        buildString {
-                            append(details.displayName)
-                            append("\n")
-                            append(stringResource(R.string.install_file_size))
-                            append(": ")
-                            append(details.sizeBytes?.let(::formatFileSize) ?: stringResource(R.string.install_file_unavailable))
-                            append("\n")
-                            append(stringResource(R.string.install_file_sha256))
-                            append(": ")
-                            append(details.sha256 ?: stringResource(R.string.install_file_unavailable))
-                        }
-                    } ?: selectedBootUri?.let {
-                        stringResource(R.string.install_reading_file_details)
-                    }
+                StepIndicator(activeStep = if (selectedBootUri == null) 1 else 2)
 
-                    BasicComponent(
-                        title = stringResource(R.string.install_patch_local_boot_image),
-                        summary = bootDetailsText ?: stringResource(R.string.install_select_boot_image),
-                        endActions = {
-                            Icon(
-                                imageVector = Icons.Rounded.ChevronRight,
-                                contentDescription = null,
-                                tint = colorScheme.onSurfaceVariantSummary
-                            )
-                        }
-                    )
-                }
+                BootImageCard(
+                    selectedBootDetails = selectedBootDetails,
+                    isReading = selectedBootUri != null && selectedBootDetails == null,
+                    onPickBoot = { selectBootLauncher.launch("*/*") }
+                )
+
                 AnimatedVisibility(
-                    visible = installMethod is InstallMethod.DirectInstall || installMethod is InstallMethod.DirectInstallToInactiveSlot,
+                    visible = selectedBootUri != null,
                     enter = expandVertically(),
                     exit = shrinkVertically()
                 ) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                    ) {
-                        val isOta = installMethod is InstallMethod.DirectInstallToInactiveSlot
-                        val suffix = produceState(initialValue = "", isOta) {
-                            value = getSlotSuffix(isOta)
-                        }.value
-                        val partitions = produceState(initialValue = emptyList()) {
-                            value = getAvailablePartitions()
-                        }.value
-                        val defaultPartition = produceState(initialValue = "") {
-                            value = getDefaultPartition()
-                        }.value
-                        partitionsState = partitions
-                        val displayPartitions = partitions.map { name ->
-                            if (defaultPartition == name) "$name (default)" else name
-                        }
-                        val defaultIndex = partitions.indexOf(defaultPartition).takeIf { it >= 0 } ?: 0
-                        if (!hasCustomSelected) partitionSelectionIndex = defaultIndex
-                        SuperDropdown(
-                            items = displayPartitions,
-                            selectedIndex = partitionSelectionIndex,
-                            title = "${stringResource(R.string.install_select_partition)} (${suffix})",
-                            onSelectedIndexChange = { index ->
-                                hasCustomSelected = true
-                                partitionSelectionIndex = index
-                            },
-                            startAction = {
-                                Icon(
-                                    MiuixIcons.ConvertFile,
-                                    tint = colorScheme.onSurface,
-                                    modifier = Modifier.padding(end = 16.dp),
-                                    contentDescription = null
-                                )
+                    LkmSelectionCard(
+                        option = lkmOption,
+                        selectedLkmLabel = selectedLkmLabel,
+                        selectedLkmUriString = selectedLkmUriString,
+                        repoLkmInfo = repoLkmInfo,
+                        isDownloading = isDownloadingRepoLkm,
+                        downloadProgress = repoDownloadProgress,
+                        onSelectOption = { selected ->
+                            lkmOption = selected
+                            if (selected == LkmInstallOption.Repository) {
+                                lkmSelection = LkmSelection.KmiNone
                             }
-                        )
-                    }
-                }
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    onClick = onLkmUpload
-                ) {
-                    val lkmDetailsText = when {
-                        selectedLkmLabel != null -> selectedLkmLabel
-                        selectedLkmUriString != null -> stringResource(R.string.install_reading_selected_file)
-                        else -> null
-                    }
-
-                    BasicComponent(
-                        title = stringResource(R.string.install_load_lkm_manually),
-                        summary = lkmDetailsText ?: stringResource(R.string.install_select_lkm_file),
-                        endActions = {
-                            Icon(
-                                imageVector = Icons.Rounded.ChevronRight,
-                                contentDescription = null,
-                                tint = colorScheme.onSurfaceVariantSummary
-                            )
-                        }
+                        },
+                        onPickLocalLkm = { selectLkmLauncher.launch("*/*") }
                     )
                 }
+
                 TextButton(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
-                    text = stringResource(id = R.string.install_next),
-                    enabled = installMethod != null,
+                    text = stringResource(id = R.string.install_install_id),
+                    enabled = selectedBootUri != null && !isDownloadingRepoLkm,
                     colors = ButtonDefaults.textButtonColorsPrimary(),
-                    onClick = { onClickNext() }
+                    onClick = { onInstallClick() }
                 )
                 Spacer(
                     Modifier.height(
@@ -415,84 +347,290 @@ fun InstallScreen() {
     }
 }
 
-sealed class InstallMethod {
-    data class SelectFile(
-        val uri: Uri? = null,
-        @get:StringRes override val label: Int = R.string.select_file,
-        override val summary: String?
-    ) : InstallMethod()
-
-    data object DirectInstall : InstallMethod() {
-        override val label: Int
-            get() = R.string.direct_install
+@Composable
+private fun StepIndicator(activeStep: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StepText(text = stringResource(R.string.install_step_select), active = activeStep == 1)
+        Text(
+            modifier = Modifier.padding(horizontal = 8.dp),
+            text = stringResource(R.string.install_step_separator),
+            color = Color(IOS_SECONDARY),
+            fontSize = 13.sp,
+        )
+        StepText(text = stringResource(R.string.install_step_lkm), active = activeStep == 2)
+        Text(
+            modifier = Modifier.padding(horizontal = 8.dp),
+            text = stringResource(R.string.install_step_separator),
+            color = Color(IOS_SECONDARY),
+            fontSize = 13.sp,
+        )
+        StepText(text = stringResource(R.string.install_step_install), active = activeStep == 3)
     }
-
-    data object DirectInstallToInactiveSlot : InstallMethod() {
-        override val label: Int
-            get() = R.string.install_inactive_slot
-    }
-
-    abstract val label: Int
-    open val summary: String? = null
 }
 
 @Composable
-private fun SelectInstallMethod(
-    options: List<InstallMethod>,
-    selectedOption: InstallMethod?,
-    onSelected: (InstallMethod) -> Unit = {}
-) {
-    val confirmDialog = rememberConfirmDialog(
-        onConfirm = {
-            onSelected(InstallMethod.DirectInstallToInactiveSlot)
-        }
+private fun StepText(text: String, active: Boolean) {
+    Text(
+        text = text,
+        color = if (active) Color.White else Color(IOS_SECONDARY),
+        fontSize = 13.sp,
+        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
     )
-    val dialogTitle = stringResource(id = android.R.string.dialog_alert_title)
-    val dialogContent = stringResource(id = R.string.install_inactive_slot_warning)
+}
 
-    val onClick = { option: InstallMethod ->
-
-        when (option) {
-            is InstallMethod.DirectInstall -> {
-                onSelected(option)
+@Composable
+private fun BootImageCard(
+    selectedBootDetails: SelectedBootImageDetails?,
+    isReading: Boolean,
+    onPickBoot: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.defaultColors(color = Color(0xFF1C1C1E)),
+        insideMargin = androidx.compose.foundation.layout.PaddingValues(16.dp),
+        cornerRadius = 14.dp,
+    ) {
+        SectionHeader(
+            icon = Icons.Outlined.SystemUpdate,
+            title = stringResource(R.string.install_boot_image_title)
+        )
+        TextButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 14.dp)
+                .border(1.dp, Color(IOS_BLUE), RoundedCornerShape(14.dp)),
+            text = stringResource(R.string.install_pick_boot_img),
+            onClick = onPickBoot
+        )
+        val detailsText = selectedBootDetails?.let { details ->
+            buildString {
+                append(details.displayName)
+                append("\n")
+                append(stringResource(R.string.install_file_size))
+                append(": ")
+                append(details.sizeBytes?.let(::formatFileSize) ?: stringResource(R.string.install_file_unavailable))
+                append("\n")
+                append(stringResource(R.string.install_file_sha256))
+                append(": ")
+                append(details.sha256 ?: stringResource(R.string.install_file_unavailable))
             }
-
-            is InstallMethod.DirectInstallToInactiveSlot -> {
-                confirmDialog.showConfirm(dialogTitle, dialogContent)
-            }
-
-            is InstallMethod.SelectFile -> Unit
+        }
+        if (detailsText != null || isReading) {
+            Text(
+                modifier = Modifier.padding(top = 12.dp),
+                text = detailsText ?: stringResource(R.string.install_reading_file_details),
+                color = Color(IOS_SECONDARY),
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+            )
         }
     }
+}
 
-    Column {
-        options.forEach { option ->
-            val interactionSource = remember { MutableInteractionSource() }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .toggleable(
-                        value = option.javaClass == selectedOption?.javaClass,
-                        onValueChange = {
-                            onClick(option)
-                        },
-                        role = Role.RadioButton,
-                        indication = LocalIndication.current,
-                        interactionSource = interactionSource
+@Composable
+private fun LkmSelectionCard(
+    option: LkmInstallOption,
+    selectedLkmLabel: String?,
+    selectedLkmUriString: String?,
+    repoLkmInfo: RepoLkmInfo?,
+    isDownloading: Boolean,
+    downloadProgress: Float,
+    onSelectOption: (LkmInstallOption) -> Unit,
+    onPickLocalLkm: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+        colors = CardDefaults.defaultColors(color = Color(0xFF1C1C1E)),
+        insideMargin = androidx.compose.foundation.layout.PaddingValues(16.dp),
+        cornerRadius = 14.dp,
+    ) {
+        SectionHeader(
+            icon = Icons.Outlined.Memory,
+            title = stringResource(R.string.install_lkm_title)
+        )
+        RadioOptionCard(
+            modifier = Modifier.padding(top = 14.dp),
+            selected = option == LkmInstallOption.Local,
+            icon = Icons.Outlined.FolderOpen,
+            title = stringResource(R.string.home_use_local_lkm_id),
+            subtext = selectedLkmLabel ?: selectedLkmUriString?.let { stringResource(R.string.install_reading_selected_file) },
+            onClick = { onSelectOption(LkmInstallOption.Local) }
+        )
+        AnimatedVisibility(visible = option == LkmInstallOption.Local) {
+            Column {
+                TextButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
+                        .border(1.dp, Color(IOS_BLUE), RoundedCornerShape(14.dp)),
+                    text = stringResource(R.string.install_select_lkm_file),
+                    onClick = onPickLocalLkm
+                )
+            }
+        }
+        RadioOptionCard(
+            modifier = Modifier.padding(top = 10.dp),
+            selected = option == LkmInstallOption.Repository,
+            icon = Icons.Outlined.CloudDownload,
+            title = stringResource(R.string.install_repo_lkm_title),
+            subtext = repoLkmInfo?.let {
+                stringResource(R.string.install_repo_lkm_detected, it.key, it.displayVersion) +
+                        "\n" + stringResource(R.string.install_repo_lkm_source)
+            } ?: stringResource(R.string.install_repo_lkm_not_detected),
+            onClick = { onSelectOption(LkmInstallOption.Repository) }
+        )
+        AnimatedVisibility(visible = isDownloading) {
+            LinearDownloadProgress(
+                modifier = Modifier.padding(top = 12.dp),
+                progress = downloadProgress
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color(IOS_BLUE),
+            modifier = Modifier.size(24.dp),
+        )
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun RadioOptionCard(
+    modifier: Modifier = Modifier,
+    selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtext: String?,
+    onClick: () -> Unit,
+) {
+    val borderColor = if (selected) Color(IOS_BLUE) else Color(IOS_SEPARATOR)
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.dp, borderColor, RoundedCornerShape(14.dp)),
+        onClick = onClick,
+        colors = CardDefaults.defaultColors(color = Color.Transparent),
+        insideMargin = androidx.compose.foundation.layout.PaddingValues(12.dp),
+        cornerRadius = 14.dp,
+        showIndication = true,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) Color(IOS_BLUE) else Color(IOS_SECONDARY),
+                modifier = Modifier.size(24.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                if (!subtext.isNullOrBlank()) {
+                    Text(
+                        modifier = Modifier.padding(top = 3.dp),
+                        text = subtext,
+                        color = Color(IOS_SECONDARY),
+                        fontSize = 12.sp,
                     )
-            ) {
-                SuperCheckbox(
-                    title = stringResource(id = option.label),
-                    summary = option.summary,
-                    checked = option.javaClass == selectedOption?.javaClass,
-                    onCheckedChange = {
-                        onClick(option)
-                    },
+                }
+            }
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Outlined.CheckCircle,
+                    contentDescription = null,
+                    tint = Color(IOS_BLUE),
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
     }
+}
+
+@Composable
+private fun LinearDownloadProgress(
+    modifier: Modifier = Modifier,
+    progress: Float,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(4.dp)
+            .background(Color(IOS_SEPARATOR), RoundedCornerShape(2.dp))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .height(4.dp)
+                .background(Color(IOS_BLUE), RoundedCornerShape(2.dp))
+        )
+    }
+}
+
+private suspend fun downloadRepoLkm(
+    context: Context,
+    info: RepoLkmInfo,
+    onProgress: (Float) -> Unit,
+): Uri = withContext(Dispatchers.IO) {
+    val targetDir = File(context.filesDir, "apexsu")
+    val target = File(targetDir, info.fileName)
+    targetDir.mkdirs()
+
+    ksuApp.okhttpClient.newCall(Request.Builder().url(info.downloadUrl).build()).execute().use { response ->
+        if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+        val body = response.body
+        val total = body.contentLength()
+        body.byteStream().use { input ->
+            target.outputStream().use { output ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                var copied = 0L
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    output.write(buffer, 0, read)
+                    copied += read
+                    if (total > 0L) {
+                        withContext(Dispatchers.Main) {
+                            onProgress((copied.toFloat() / total.toFloat()).coerceIn(0f, 1f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    withContext(Dispatchers.Main) { onProgress(1f) }
+    Uri.fromFile(target)
 }
 
 private data class SelectedBootImageDetails(

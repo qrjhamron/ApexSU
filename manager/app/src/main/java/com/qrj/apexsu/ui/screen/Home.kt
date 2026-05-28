@@ -49,13 +49,16 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Warning
-import androidx.compose.material.icons.rounded.CheckCircleOutline
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Extension
-import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.FolderOpen
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Error
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
@@ -429,157 +432,94 @@ private fun StatusCard(
                         initialOffsetY = { it / 4 }
                     )
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Min),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
-                        onClick = {
-                            onClickInstall()
-                        },
-                        showIndication = true,
-                        pressFeedbackType = PressFeedbackType.Tilt
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize()
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
+                            onClick = { onClickInstall() },
+                            showIndication = true,
+                            pressFeedbackType = PressFeedbackType.Tilt,
+                            insideMargin = PaddingValues(16.dp),
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .offset(38.dp, 45.dp),
-                                contentAlignment = Alignment.BottomEnd
-                            ) {
-                                Icon(
-                                    modifier = Modifier.size(170.dp),
-                                    imageVector = Icons.Rounded.CheckCircleOutline,
-                                    tint = if (isDynamicColor) {
-                                        colorScheme.primary.copy(alpha = 0.8f)
-                                    } else {
-                                        Color(0xFF36D167)
-                                    },
-                                    contentDescription = null
-                                )
-                            }
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(all = 16.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp),
-                                    ) {
-                                        Card(
-                                            modifier = Modifier.fillMaxSize(),
-                                            colors = CardDefaults.defaultColors(color = Color(IOS_GREEN)),
-                                            cornerRadius = 4.dp,
-                                            insideMargin = PaddingValues(0.dp),
-                                        ) {}
-                                    }
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.CheckCircle,
+                                        contentDescription = stringResource(R.string.home_installed_id),
+                                        tint = Color(IOS_GREEN),
+                                        modifier = Modifier.size(24.dp),
+                                    )
                                     Text(
-                                        modifier = Modifier.padding(start = 8.dp),
                                         text = stringResource(R.string.home_installed_id),
                                         fontSize = 17.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = FontWeight.Bold,
                                         color = Color.White,
                                     )
                                 }
-                                Spacer(Modifier.height(2.dp))
                                 Text(
                                     modifier = Modifier.fillMaxWidth(),
-                                    text = stringResource(R.string.home_working_version, ksuVersion),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    text = Os.uname().release,
+                                    fontSize = 12.sp,
                                     fontFamily = FontFamily.Monospace,
                                     color = Color(IOS_SECONDARY),
                                 )
                                 Text(
                                     text = "${stringResource(R.string.home_android_version)}: ${Build.VERSION.RELEASE}",
-                                    fontSize = 13.sp,
-                                    color = Color(IOS_SECONDARY),
-                                )
-                                Text(
-                                    text = "${stringResource(R.string.home_selinux_status)}: ${getSELinuxStatus()}",
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     color = Color(IOS_SECONDARY),
                                 )
                             }
                         }
-                    }
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            insideMargin = PaddingValues(16.dp),
-                            onClick = { onClickSuperuser() },
-                            showIndication = true,
-                            pressFeedbackType = PressFeedbackType.Tilt
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.Start
-                            ) {
-                                Text(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    text = stringResource(R.string.superuser),
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 15.sp,
-                                    color = colorScheme.onSurfaceVariantSummary,
-                                )
-                                Text(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    text = superuserCount.toString(),
-                                    fontSize = 26.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = colorScheme.onSurface,
-                                )
-                            }
+                            StatCard(
+                                modifier = Modifier.weight(1f),
+                                label = stringResource(R.string.superuser),
+                                value = superuserCount.toString(),
+                                icon = Icons.Outlined.Security,
+                                onClick = onClickSuperuser,
+                            )
+                            StatCard(
+                                modifier = Modifier.weight(1f),
+                                label = stringResource(R.string.module),
+                                value = moduleCount.toString(),
+                                icon = Icons.Outlined.Extension,
+                                onClick = onclickModule,
+                            )
+                            SelinuxStatCard(
+                                modifier = Modifier.weight(1f),
+                                value = getSELinuxStatus(),
+                            )
                         }
-                        Spacer(Modifier.height(12.dp))
+
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            insideMargin = PaddingValues(16.dp),
-                            onClick = { onclickModule() },
-                            showIndication = true,
-                            pressFeedbackType = PressFeedbackType.Tilt
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
+                            insideMargin = PaddingValues(0.dp),
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.Start
-                            ) {
-                                Text(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    text = stringResource(R.string.module),
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 15.sp,
-                                    color = colorScheme.onSurfaceVariantSummary,
-                                )
-                                Text(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    text = moduleCount.toString(),
-                                    fontSize = 26.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = colorScheme.onSurface,
-                                )
-                            }
+                            QuickActionRow(
+                                icon = Icons.Outlined.Security,
+                                title = stringResource(R.string.superuser),
+                                onClick = onClickSuperuser,
+                            )
+                            Hairline()
+                            QuickActionRow(
+                                icon = Icons.Outlined.Extension,
+                                title = stringResource(R.string.module),
+                                onClick = onclickModule,
+                            )
                         }
                     }
-                }
                 }
             }
 
@@ -600,9 +540,9 @@ private fun StatusCard(
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Icon(
-                                Icons.Outlined.Warning,
+                                Icons.Outlined.WarningAmber,
                                 stringResource(R.string.home_not_installed_id),
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(24.dp),
                                 tint = Color(IOS_ORANGE),
                             )
                             Column {
@@ -627,14 +567,14 @@ private fun StatusCard(
                             Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                                 Hairline()
                                 LkmRow(
-                                    icon = Icons.Rounded.FolderOpen,
+                                    icon = Icons.Outlined.FolderOpen,
                                     title = stringResource(R.string.home_pick_boot_image_id),
                                     subtitle = stringResource(R.string.home_pick_boot_image_sub_id),
                                     onClick = onClickInstall,
                                 )
                                 Hairline()
                                 LkmRow(
-                                    icon = Icons.Rounded.Extension,
+                                    icon = Icons.Outlined.Memory,
                                     title = stringResource(R.string.home_use_local_lkm_id),
                                     subtitle = when {
                                         !selectedKoName.isNullOrEmpty() -> selectedKoName
@@ -664,11 +604,11 @@ private fun StatusCard(
                         summary = stringResource(R.string.home_unsupported_reason),
                         startAction = {
                             Icon(
-                                Icons.Rounded.ErrorOutline,
+                                Icons.Outlined.Error,
                                 stringResource(R.string.home_unsupported),
                                 modifier = Modifier
                                     .padding(end = 16.dp),
-                                tint = colorScheme.onBackground,
+                                tint = Color(0xFFFF453A),
                             )
                         }
                     )
@@ -738,10 +678,137 @@ private fun LkmRow(
                 )
             }
             Icon(
-                imageVector = Icons.Rounded.ChevronRight,
+                imageVector = Icons.Outlined.ChevronRight,
                 contentDescription = null,
                 tint = Color(IOS_SECONDARY),
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatCard(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = modifier.height(80.dp),
+        colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
+        insideMargin = PaddingValues(12.dp),
+        onClick = onClick,
+        showIndication = true,
+        pressFeedbackType = PressFeedbackType.Tilt,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(IOS_SECONDARY),
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = value,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                color = Color(IOS_SECONDARY),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelinuxStatCard(
+    modifier: Modifier = Modifier,
+    value: String,
+) {
+    Card(
+        modifier = modifier.height(80.dp),
+        colors = CardDefaults.defaultColors(color = Color(IOS_BG)),
+        insideMargin = PaddingValues(12.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Shield,
+                    contentDescription = null,
+                    tint = Color(IOS_SECONDARY),
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = "SELinux",
+                    fontSize = 11.sp,
+                    color = Color(IOS_SECONDARY),
+                )
+            }
+            Text(
+                text = value,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.defaultColors(color = Color.Transparent),
+        insideMargin = PaddingValues(0.dp),
+        showIndication = true,
+        pressFeedbackType = PressFeedbackType.Sink,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(IOS_BLUE),
+                modifier = Modifier.size(24.dp),
+            )
+            Text(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp),
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
+            )
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = Color(IOS_SECONDARY),
+                modifier = Modifier.size(24.dp),
             )
         }
     }
@@ -904,26 +971,37 @@ private fun DeviceInfoCard() {
         content: String,
         bottomPadding: Dp = 24.dp
     ) {
-        Column(
+        Row(
             modifier = Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {
                     copyToClipboard(context, title, content)
                 }
-            )
+            ),
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                text = title,
-                fontSize = MiuixTheme.textStyles.headline1.fontSize,
-                fontWeight = FontWeight.Medium,
-                color = colorScheme.onSurface
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                tint = colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier
+                    .padding(end = 10.dp, top = 2.dp)
+                    .size(20.dp),
             )
-            Text(
-                text = content,
-                fontSize = MiuixTheme.textStyles.body2.fontSize,
-                color = colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.padding(top = 2.dp, bottom = bottomPadding)
-            )
+            Column {
+                Text(
+                    text = title,
+                    fontSize = MiuixTheme.textStyles.headline1.fontSize,
+                    fontWeight = FontWeight.Medium,
+                    color = colorScheme.onSurface
+                )
+                Text(
+                    text = content,
+                    fontSize = MiuixTheme.textStyles.body2.fontSize,
+                    color = colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(top = 2.dp, bottom = bottomPadding)
+                )
+            }
         }
     }
     Card {
@@ -979,26 +1057,37 @@ private fun InfoCard() {
         content: String,
         bottomPadding: Dp = 24.dp
     ) {
-        Column(
+        Row(
             modifier = Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {
                     copyToClipboard(context, title, content)
                 }
-            )
+            ),
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                text = title,
-                fontSize = MiuixTheme.textStyles.headline1.fontSize,
-                fontWeight = FontWeight.Medium,
-                color = colorScheme.onSurface
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                tint = colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier
+                    .padding(end = 10.dp, top = 2.dp)
+                    .size(20.dp),
             )
-            Text(
-                text = content,
-                fontSize = MiuixTheme.textStyles.body2.fontSize,
-                color = colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.padding(top = 2.dp, bottom = bottomPadding)
-            )
+            Column {
+                Text(
+                    text = title,
+                    fontSize = MiuixTheme.textStyles.headline1.fontSize,
+                    fontWeight = FontWeight.Medium,
+                    color = colorScheme.onSurface
+                )
+                Text(
+                    text = content,
+                    fontSize = MiuixTheme.textStyles.body2.fontSize,
+                    color = colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(top = 2.dp, bottom = bottomPadding)
+                )
+            }
         }
     }
     Card {
