@@ -1,10 +1,10 @@
 {
-  "name": "KernelSU_website",
+  "name": "ApexSU_website",
   "version": "1.0.0",
-  "description": "KernelSU official website: https://kernelsu.org",
+  "description": "ApexSU official website: https://github.com/qrjhamron/ApexSU",
   "main": "index.js",
-  "repository": "https://kernelsu.org",
-  "author": "weishu",
+  "repository": "https://github.com/qrjhamron/ApexSU",
+  "author": "qrjhamron",
   "license": "MIT",
   "devDependencies": {
     "vitepress": "^1.6.4",

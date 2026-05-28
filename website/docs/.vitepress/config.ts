@@ -4,17 +4,11 @@ import { readdir, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
 export default defineConfig( {
-    title: 'KernelSU',
+    title: 'ApexSU',
     locales: locales.locales,
-    head: [
-        ['script', {
-            async: 'async',
-            src: 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8356785667482909',
-            crossorigin: 'anonymous',
-        }],
-    ],
+    head: [],
     sitemap: {
-        hostname: 'https://kernelsu.org'
+        hostname: 'https://github.com/qrjhamron/ApexSU'
     },
     buildEnd: async (config: SiteConfig) => {
         const templateDir = resolve(config.outDir, 'templates');

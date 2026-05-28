@@ -18,16 +18,16 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/tiann/KernelSU' }
+      { icon: 'github', link: 'https://github.com/qrjhamron/ApexSU' }
     ],
 
     footer: {
         message: 'Released under the GPL3 License.',
-        copyright: 'Copyright © 2022-present KernelSU developers.'
+        copyright: 'Copyright © 2022-present ApexSU developers.'
     },
 
     editLink: {
-        pattern: 'https://github.com/tiann/KernelSU/edit/main/website/docs/:path',
+        pattern: 'https://github.com/qrjhamron/ApexSU/edit/main/website/docs/:path',
         text: 'Edit this page on GitHub'
     }
   }
@@ -44,12 +44,10 @@ function sidebarGuide() {
     {
         text: 'Guide',
         items: [
-          { text: 'What is KernelSU?', link: '/guide/what-is-kernelsu' },
+          { text: 'What is ApexSU?', link: '/guide/what-is-kernelsu' },
           { text: 'Difference with Magisk', link: '/guide/difference-with-magisk' },
           { text: 'Installation', link: '/guide/installation' },
           { text: 'How to build', link: '/guide/how-to-build' },
-          { text: 'Intergrate for non-GKI devices', link: '/guide/how-to-integrate-for-non-gki'},
-          { text: 'Unofficially supported devices', link: '/guide/unofficially-support-devices.md' },
           { text: 'Module guide', link: '/guide/module.md' },
           { text: 'Metamodule', link: '/guide/metamodule.md' },
           { text: 'Module WebUI', link: '/guide/module-webui.md' },
