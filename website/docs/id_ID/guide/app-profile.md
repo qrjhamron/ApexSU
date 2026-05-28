@@ -1,6 +1,6 @@
 # App Profile
 
-App Profile adalah mekanisme yang disediakan KernelSU untuk menyesuaikan konfigurasi beragam aplikasi.
+App Profile adalah mekanisme yang disediakan ApexSU untuk menyesuaikan konfigurasi beragam aplikasi.
 
 Untuk aplikasi yang diberi izin root (misalnya dapat memakai `su`), App Profile juga dapat disebut Root Profile. Ia memungkinkan kita menyesuaikan `uid`, `gid`, `groups`, `capabilities`, dan aturan `SELinux` dari perintah `su`, sehingga hak istimewa pengguna root dapat dibatasi. Contohnya, hanya memberikan izin jaringan kepada aplikasi firewall sambil menolak izin akses berkas, atau memberikan izin shell alih-alih akses root penuh untuk aplikasi pembeku: **menjaga kekuatan agar tetap terkungkung dalam prinsip least privilege.**
 
@@ -31,7 +31,7 @@ uid=2000(shell) gid=2000(shell) groups=2000(shell),1004(input),1007(log),1011(ad
 
 Di sini UID-nya `2000`, dan GID (ID grup utama) juga `2000`. Selain itu ia berada di beberapa grup tambahan seperti `inet` (boleh membuat soket `AF_INET` dan `AF_INET6`, artinya boleh mengakses jaringan) dan `sdcard_rw` (boleh baca/tulis kartu SD).
 
-Root Profile milik KernelSU memungkinkan kita menyesuaikan UID, GID, dan grup untuk proses root setelah menjalankan `su`. Misalnya, Root Profile sebuah aplikasi root dapat mengatur UID menjadi `2000`, sehingga ketika menggunakan `su`, hak sebenarnya setara dengan shell ADB. Kita juga dapat menghapus grup `inet` agar perintah `su` tidak bisa mengakses jaringan.
+Root Profile milik ApexSU memungkinkan kita menyesuaikan UID, GID, dan grup untuk proses root setelah menjalankan `su`. Misalnya, Root Profile sebuah aplikasi root dapat mengatur UID menjadi `2000`, sehingga ketika menggunakan `su`, hak sebenarnya setara dengan shell ADB. Kita juga dapat menghapus grup `inet` agar perintah `su` tidak bisa mengakses jaringan.
 
 ::: tip CATATAN
 App Profile hanya mengendalikan hak proses root setelah menggunakan `su`, bukan izin asli aplikasi. Jika aplikasi meminta izin akses jaringan, ia tetap dapat mengakses jaringan meski tidak menggunakan `su`. Menghapus grup `inet` dari `su` hanya membuat `su` tidak bisa mengakses jaringan.
@@ -49,7 +49,7 @@ Sejak Linux 2.2, hak istimewa yang biasanya dimiliki superuser dipecah menjadi u
 
 Setiap capability mewakili satu atau lebih hak. Misalnya, `CAP_DAC_READ_SEARCH` mewakili kemampuan melewati pemeriksaan izin untuk membaca berkas serta izin baca dan eksekusi direktori. Jika seorang pengguna dengan effective UID `0` (root) tidak memiliki capability `CAP_DAC_READ_SEARCH` atau capability di atasnya, maka meskipun ia root ia tidak bisa sembarang membaca berkas.
 
-Root Profile KernelSU memungkinkan kita menyesuaikan capability proses root setelah menjalankan `su`, sehingga yang diberikan hanyalah “hak root parsial”. Berbeda dengan UID dan GID di atas, beberapa aplikasi root memang membutuhkan UID `0` setelah memakai `su`. Pada kasus seperti ini, membatasi capability pengguna root dengan UID `0` dapat membatasi operasi yang boleh dilakukan.
+Root Profile ApexSU memungkinkan kita menyesuaikan capability proses root setelah menjalankan `su`, sehingga yang diberikan hanyalah “hak root parsial”. Berbeda dengan UID dan GID di atas, beberapa aplikasi root memang membutuhkan UID `0` setelah memakai `su`. Pada kasus seperti ini, membatasi capability pengguna root dengan UID `0` dapat membatasi operasi yang boleh dilakukan.
 
 ::: tip SANGAT DISARANKAN
 Dokumentasi resmi capability Linux [dapat dibaca di sini](https://man7.org/linux/man-pages/man7/capabilities.7.html) dan menjelaskan detail hak yang diwakili tiap capability. Jika Anda ingin menyesuaikan capability, sangat disarankan membaca dokumen ini terlebih dahulu.
@@ -74,7 +74,7 @@ Menjelaskan SELinux secara tuntas sangatlah kompleks dan berada di luar cakupan 
 2. [Red Hat: What Is SELinux?](https://www.redhat.com/en/topics/linux/what-is-selinux)
 3. [ArchLinux: SELinux](https://wiki.archlinux.org/title/SELinux)
 
-Root Profile KernelSU memungkinkan kita menyesuaikan konteks SELinux dari proses root setelah menjalankan `su`. Kita bisa menetapkan aturan kontrol akses khusus untuk konteks ini sehingga hak root dapat diatur secara sangat granular.
+Root Profile ApexSU memungkinkan kita menyesuaikan konteks SELinux dari proses root setelah menjalankan `su`. Kita bisa menetapkan aturan kontrol akses khusus untuk konteks ini sehingga hak root dapat diatur secara sangat granular.
 
 Dalam skenario umum, ketika sebuah aplikasi menjalankan `su`, prosesnya berpindah ke domain SELinux dengan **akses tidak terbatas**, seperti `u:r:su:s0`. Melalui Root Profile, domain ini bisa diganti menjadi domain kustom seperti `u:r:app1:s0`, lalu serangkaian aturan dapat ditetapkan untuk domain tersebut:
 
@@ -106,13 +106,13 @@ Jika Anda benar-benar perlu memberikan izin root kepada ADB (misalnya sebagai pe
 
 ### Umount modules
 
-KernelSU menyediakan mekanisme systemless untuk memodifikasi partisi sistem dengan memasang OverlayFS. Namun beberapa aplikasi peka terhadap perilaku ini. Dalam kasus tersebut, kita dapat membongkar (umount) modul yang dimuat di aplikasi tertentu dengan mengaktifkan opsi “Umount modules”.
+ApexSU menyediakan mekanisme systemless untuk memodifikasi partisi sistem dengan memasang OverlayFS. Namun beberapa aplikasi peka terhadap perilaku ini. Dalam kasus tersebut, kita dapat membongkar (umount) modul yang dimuat di aplikasi tertentu dengan mengaktifkan opsi “Umount modules”.
 
-Selain itu, antarmuka pengaturan KernelSU Manager menyediakan opsi “Umount modules by default”. Secara bawaan opsi ini **aktif**, artinya KernelSU atau modul tertentu akan membongkar modul untuk aplikasi ini kecuali ada pengaturan tambahan. Jika Anda tidak menginginkan perilaku ini atau jika aplikasi tertentu terpengaruh, ada dua pendekatan:
+Selain itu, antarmuka pengaturan ApexSU Manager menyediakan opsi “Umount modules by default”. Secara bawaan opsi ini **aktif**, artinya ApexSU atau modul tertentu akan membongkar modul untuk aplikasi ini kecuali ada pengaturan tambahan. Jika Anda tidak menginginkan perilaku ini atau jika aplikasi tertentu terpengaruh, ada dua pendekatan:
 
 1. Biarkan “Umount modules by default” tetap aktif dan nonaktifkan opsi “Umount modules” di App Profile untuk aplikasi yang memang perlu memuat modul (berperan sebagai daftar putih).
 2. Nonaktifkan “Umount modules by default” lalu aktifkan opsi “Umount modules” di App Profile hanya untuk aplikasi yang harus dibongkar modulnya (berperan sebagai daftar hitam).
 
 ::: info
-Pada perangkat dengan kernel versi 5.10 ke atas, kernel akan membongkar modul tanpa tindakan tambahan. Namun di perangkat dengan kernel di bawah 5.10, opsi ini hanya berupa konfigurasi dan KernelSU sendiri tidak mengambil tindakan apa pun. Jika ingin memakai opsi “Umount modules” pada kernel sebelum 5.10 Anda harus backport fungsi `path_umount` di `fs/namespace.c`. Anda bisa menemukan info lebih lanjut di bagian akhir halaman [Integrate for non-GKI devices](https://kernelsu.org/guide/how-to-integrate-for-non-gki.html#how-to-backport-path_umount). Beberapa modul seperti Zygisksu juga memakai opsi ini untuk menentukan apakah modul perlu dibongkar.
+Pada perangkat dengan kernel versi 5.10 ke atas, kernel akan membongkar modul tanpa tindakan tambahan. Namun di perangkat dengan kernel di bawah 5.10, opsi ini hanya berupa konfigurasi dan ApexSU sendiri tidak mengambil tindakan apa pun. Jika ingin memakai opsi “Umount modules” pada kernel sebelum 5.10 Anda harus backport fungsi `path_umount` di `fs/namespace.c`. Anda bisa menemukan info lebih lanjut di bagian akhir halaman [Integrate for non-GKI devices](https://qrjhamron.github.io/ApexSU/guide/how-to-integrate-for-non-gki.html#how-to-backport-path_umount). Beberapa modul seperti Zygisksu juga memakai opsi ini untuk menentukan apakah modul perlu dibongkar.
 :::

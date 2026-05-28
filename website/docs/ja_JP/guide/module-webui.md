@@ -1,8 +1,8 @@
 # Module WebUI
 
-KernelSU のモジュールは、ブートスクリプトの実行やシステムファイルの修正に加えて、UI インターフェースの表示やユーザーとの対話もサポートしています。
+ApexSU のモジュールは、ブートスクリプトの実行やシステムファイルの修正に加えて、UI インターフェースの表示やユーザーとの対話もサポートしています。
 
-モジュールは、任意の Web 技術を通じて HTML + CSS + JavaScript のページを作成することができます。KernelSU のマネージャーは WebView を通じてこれらのページを表示します。また、シェルコマンドの実行など、システムと対話するためのいくつかのAPIを提供しています。
+モジュールは、任意の Web 技術を通じて HTML + CSS + JavaScript のページを作成することができます。ApexSU のマネージャーは WebView を通じてこれらのページを表示します。また、シェルコマンドの実行など、システムと対話するためのいくつかのAPIを提供しています。
 
 ## `webroot` ディレクトリ
 
@@ -17,30 +17,30 @@ Web リソースファイルは、モジュールのルートディレクトリ�
 ```
 
 :::警告
-モジュールをインストールするとき、KernelSU はこのディレクトリのパーミッションと SELinux コンテキストを自動的に設定します。何をしているかわからないのであれば、自分でこのディレクトリのパーミッションを設定しないでください！
+モジュールをインストールするとき、ApexSU はこのディレクトリのパーミッションと SELinux コンテキストを自動的に設定します。何をしているかわからないのであれば、自分でこのディレクトリのパーミッションを設定しないでください！
 :::
 
 ページに css や JavaScript が含まれている場合は、このディレクトリに配置する必要があります。
 
 ## JavaScript API
 
-単なる表示ページであれば、通常の Web ページとの違いはありません。より重要なのは、KernelSU がモジュールの固有機能を実装させるための一連のシステム API を提供することです。
+単なる表示ページであれば、通常の Web ページとの違いはありません。より重要なのは、ApexSU がモジュールの固有機能を実装させるための一連のシステム API を提供することです。
 
-KernelSU は JavaScript ライブラリを提供し、[npm で公開しています](https://www.npmjs.com/package/kernelsu)。これを Web ページの JavaScript コードで使用することができます。
+ApexSU は JavaScript ライブラリを提供し、[npm で公開しています](https://www.npmjs.com/package/apexsu)。これを Web ページの JavaScript コードで使用することができます。
 
 たとえば、特定の設定を取得したり、プロパティを変更するために、シェルコマンドを実行することができます：
 
 ```JavaScript
-import { exec } from 'kernelsu';
+import { exec } from 'apexsu';
 
 const { errno, stdout } = exec("getprop ro.product.model");
 ```
 
 別の例として、Webページをフルスクリーンで表示したり、トーストを表示することができます。
 
-[API ドキュメント](https://www.npmjs.com/package/kernelsu)
+[API ドキュメント](https://www.npmjs.com/package/apexsu)
 
-既存のAPIがご自身のニーズを満たしていない、または使い勝手が不便である場合、[こちら](https://github.com/tiann/KernelSU/issues)でご提案いただければ幸いです！
+既存のAPIがご自身のニーズを満たしていない、または使い勝手が不便である場合、[こちら](https://github.com/qrjhamron/ApexSU/issues)でご提案いただければ幸いです！
 
 ## いくつかのヒント
 

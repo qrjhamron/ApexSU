@@ -1,12 +1,12 @@
 # Metamodul
 
-Metamodul adalah fitur revolusioner di KernelSU yang mentransfer kemampuan sistem modul yang penting dari daemon inti ke modul yang dapat dipasang. Pergeseran arsitektur ini mempertahankan stabilitas dan keamanan KernelSU sambil melepaskan potensi inovasi yang lebih besar untuk ekosistem modul.
+Metamodul adalah fitur revolusioner di ApexSU yang mentransfer kemampuan sistem modul yang penting dari daemon inti ke modul yang dapat dipasang. Pergeseran arsitektur ini mempertahankan stabilitas dan keamanan ApexSU sambil melepaskan potensi inovasi yang lebih besar untuk ekosistem modul.
 
 ## Apa itu Metamodul?
 
-Metamodul adalah jenis modul KernelSU khusus yang menyediakan fungsi infrastruktur inti untuk sistem modul. Tidak seperti modul biasa yang memodifikasi file sistem, metamodul mengontrol *bagaimana* modul biasa diinstal dan dipasang.
+Metamodul adalah jenis modul ApexSU khusus yang menyediakan fungsi infrastruktur inti untuk sistem modul. Tidak seperti modul biasa yang memodifikasi file sistem, metamodul mengontrol *bagaimana* modul biasa diinstal dan dipasang.
 
-Metamodul adalah mekanisme ekstensi berbasis plugin yang memungkinkan kustomisasi lengkap infrastruktur manajemen modul KernelSU. Dengan mendelegasikan logika pemasangan dan instalasi ke metamodul, KernelSU menghindari menjadi titik deteksi yang rapuh sambil memungkinkan strategi implementasi yang beragam.
+Metamodul adalah mekanisme ekstensi berbasis plugin yang memungkinkan kustomisasi lengkap infrastruktur manajemen modul ApexSU. Dengan mendelegasikan logika pemasangan dan instalasi ke metamodul, ApexSU menghindari menjadi titik deteksi yang rapuh sambil memungkinkan strategi implementasi yang beragam.
 
 **Karakteristik utama:**
 
@@ -17,13 +17,13 @@ Metamodul adalah mekanisme ekstensi berbasis plugin yang memungkinkan kustomisas
 
 ## Mengapa Metamodul?
 
-Solusi root tradisional memasukkan logika pemasangan ke dalam inti mereka, membuat mereka lebih mudah dideteksi dan lebih sulit untuk berkembang. Arsitektur metamodul KernelSU memecahkan masalah ini melalui pemisahan perhatian.
+Solusi root tradisional memasukkan logika pemasangan ke dalam inti mereka, membuat mereka lebih mudah dideteksi dan lebih sulit untuk berkembang. Arsitektur metamodul ApexSU memecahkan masalah ini melalui pemisahan perhatian.
 
 **Keunggulan strategis:**
 
-- **Mengurangi permukaan deteksi**: KernelSU sendiri tidak melakukan pemasangan, mengurangi vektor deteksi
+- **Mengurangi permukaan deteksi**: ApexSU sendiri tidak melakukan pemasangan, mengurangi vektor deteksi
 - **Stabilitas**: Daemon inti tetap stabil sementara implementasi pemasangan dapat berkembang
-- **Inovasi**: Komunitas dapat mengembangkan strategi pemasangan alternatif tanpa mem-fork KernelSU
+- **Inovasi**: Komunitas dapat mengembangkan strategi pemasangan alternatif tanpa mem-fork ApexSU
 - **Pilihan**: Pengguna dapat memilih implementasi yang paling sesuai dengan kebutuhan mereka
 
 **Fleksibilitas pemasangan:**
@@ -35,12 +35,12 @@ Solusi root tradisional memasukkan logika pemasangan ke dalam inti mereka, membu
 
 **Melampaui pemasangan:**
 
-- **Ekstensibilitas**: Tambahkan fitur seperti dukungan modul kernel tanpa memodifikasi inti KernelSU
-- **Modularitas**: Perbarui implementasi secara independen dari rilis KernelSU
+- **Ekstensibilitas**: Tambahkan fitur seperti dukungan modul kernel tanpa memodifikasi inti ApexSU
+- **Modularitas**: Perbarui implementasi secara independen dari rilis ApexSU
 - **Kustomisasi**: Buat solusi khusus untuk perangkat atau kasus penggunaan tertentu
 
 ::: warning PENTING
-Tanpa metamodul yang diinstal, modul **TIDAK** akan dipasang. Instalasi KernelSU yang baru memerlukan pemasangan metamodul (seperti `meta-overlayfs`) agar modul berfungsi.
+Tanpa metamodul yang diinstal, modul **TIDAK** akan dipasang. Instalasi ApexSU yang baru memerlukan pemasangan metamodul (seperti `meta-overlayfs`) agar modul berfungsi.
 :::
 
 ## Untuk Pengguna
@@ -50,7 +50,7 @@ Tanpa metamodul yang diinstal, modul **TIDAK** akan dipasang. Instalasi KernelSU
 Instal metamodul dengan cara yang sama seperti modul biasa:
 
 1. Unduh file ZIP metamodul (misalnya, `meta-overlayfs.zip`)
-2. Buka aplikasi KernelSU Manager
+2. Buka aplikasi ApexSU Manager
 3. Ketuk tombol tindakan mengambang (➕)
 4. Pilih file ZIP metamodul
 5. Reboot perangkat Anda
@@ -59,7 +59,7 @@ Metamodul `meta-overlayfs` adalah implementasi referensi resmi yang menyediakan 
 
 ### Memeriksa Metamodul Aktif
 
-Anda dapat memeriksa metamodul mana yang saat ini aktif di halaman Modul aplikasi KernelSU Manager. Metamodul aktif akan ditampilkan di daftar modul Anda dengan penunjukan khususnya.
+Anda dapat memeriksa metamodul mana yang saat ini aktif di halaman Modul aplikasi ApexSU Manager. Metamodul aktif akan ditampilkan di daftar modul Anda dengan penunjukan khususnya.
 
 ### Menghapus Instalasi Metamodul
 
@@ -69,7 +69,7 @@ Menghapus instalasi metamodul akan memengaruhi **SEMUA** modul. Setelah dihapus,
 
 Untuk menghapus instalasi:
 
-1. Buka KernelSU Manager
+1. Buka ApexSU Manager
 2. Temukan metamodul di daftar modul Anda
 3. Ketuk hapus instalasi (Anda akan melihat peringatan khusus)
 4. Konfirmasi tindakan
@@ -79,7 +79,7 @@ Setelah menghapus instalasi, Anda harus menginstal metamodul lain jika Anda ingi
 
 ### Batasan Metamodul Tunggal
 
-Hanya satu metamodul yang dapat diinstal pada satu waktu. Jika Anda mencoba menginstal metamodul kedua, KernelSU akan mencegah instalasi untuk menghindari konflik.
+Hanya satu metamodul yang dapat diinstal pada satu waktu. Jika Anda mencoba menginstal metamodul kedua, ApexSU akan mencegah instalasi untuk menghindari konflik.
 
 Untuk beralih metamodul:
 
@@ -92,7 +92,7 @@ Untuk beralih metamodul:
 
 ## Untuk Pengembang Modul
 
-Jika Anda mengembangkan modul KernelSU biasa, Anda tidak perlu terlalu khawatir tentang metamodul. Modul Anda akan berfungsi selama pengguna memiliki metamodul yang kompatibel (seperti `meta-overlayfs`) yang diinstal.
+Jika Anda mengembangkan modul ApexSU biasa, Anda tidak perlu terlalu khawatir tentang metamodul. Modul Anda akan berfungsi selama pengguna memiliki metamodul yang kompatibel (seperti `meta-overlayfs`) yang diinstal.
 
 **Yang perlu Anda ketahui:**
 
@@ -100,12 +100,12 @@ Jika Anda mengembangkan modul KernelSU biasa, Anda tidak perlu terlalu khawatir 
 - **Tidak perlu perubahan kode**: Modul yang ada terus berfungsi tanpa modifikasi
 
 ::: tip
-Jika Anda terbiasa dengan pengembangan modul Magisk, modul Anda akan berfungsi dengan cara yang sama di KernelSU ketika metamodul diinstal, karena menyediakan pemasangan kompatibel Magisk.
+Jika Anda terbiasa dengan pengembangan modul Magisk, modul Anda akan berfungsi dengan cara yang sama di ApexSU ketika metamodul diinstal, karena menyediakan pemasangan kompatibel Magisk.
 :::
 
 ## Untuk Pengembang Metamodul
 
-Membuat metamodul memungkinkan Anda untuk menyesuaikan bagaimana KernelSU menangani instalasi modul, pemasangan, dan penghapusan instalasi.
+Membuat metamodul memungkinkan Anda untuk menyesuaikan bagaimana ApexSU menangani instalasi modul, pemasangan, dan penghapusan instalasi.
 
 ### Persyaratan Dasar
 
@@ -161,7 +161,7 @@ Metamodul dapat menyediakan hingga tiga skrip hook khusus:
 **Variabel lingkungan:**
 
 - `MODDIR`: Path direktori metamodul (misalnya, `/data/adb/modules/my_metamodule`)
-- Semua variabel lingkungan KernelSU standar
+- Semua variabel lingkungan ApexSU standar
 
 **Tanggung jawab:**
 
@@ -170,7 +170,7 @@ Metamodul dapat menyediakan hingga tiga skrip hook khusus:
 - Tangani persyaratan pemasangan khusus modul
 
 ::: danger PERSYARATAN KRITIS
-Saat melakukan operasi mount, Anda **HARUS** mengatur nama sumber/perangkat ke `"KSU"`. Ini mengidentifikasi mount sebagai milik KernelSU.
+Saat melakukan operasi mount, Anda **HARUS** mengatur nama sumber/perangkat ke `"KSU"`. Ini mengidentifikasi mount sebagai milik ApexSU.
 
 **Contoh (benar):**
 
@@ -184,7 +184,7 @@ mount -t overlay -o lowerdir=/lower,upperdir=/upper,workdir=/work KSU /target
 fsconfig_set_string(fs, "source", "KSU")?;
 ```
 
-Ini penting agar KernelSU mengidentifikasi dan mengelola mount-nya dengan benar.
+Ini penting agar ApexSU mengidentifikasi dan mengelola mount-nya dengan benar.
 :::
 
 **Contoh skrip:**
@@ -303,7 +303,7 @@ tahap boot-completed:
 
 ### Mekanisme Symlink
 
-Ketika metamodul diinstal, KernelSU membuat symlink:
+Ketika metamodul diinstal, ApexSU membuat symlink:
 
 ```sh
 /data/adb/metamodule -> /data/adb/modules/<metamodule_id>
@@ -393,7 +393,7 @@ Saat mengembangkan metamodul:
 
 Sebelum merilis:
 
-1. **Uji instalasi** pada pengaturan KernelSU yang bersih
+1. **Uji instalasi** pada pengaturan ApexSU yang bersih
 2. **Verifikasi pemasangan** dengan berbagai jenis modul
 3. **Periksa kompatibilitas** dengan modul umum
 4. **Uji penghapusan instalasi** dan pembersihan
@@ -425,5 +425,5 @@ Tidak. Ini menyediakan pemasangan overlayfs standar yang kompatibel dengan sebag
 ## Lihat Juga
 
 - [Panduan Modul](module.md) - Pengembangan modul umum
-- [Perbedaan dengan Magisk](difference-with-magisk.md) - Membandingkan KernelSU dan Magisk
-- [Cara Membangun](how-to-build.md) - Membangun KernelSU dari sumber
+- [Perbedaan dengan Magisk](difference-with-magisk.md) - Membandingkan ApexSU dan Magisk
+- [Cara Membangun](how-to-build.md) - Membangun ApexSU dari sumber

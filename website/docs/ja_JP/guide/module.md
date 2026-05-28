@@ -1,42 +1,42 @@
 # モジュールのガイド
 
-KernelSU はシステムパーティションの整合性を維持しながら、システムディレクトリを変更する効果を実現するモジュール機構を提供します。この機構は一般に「システムレス」と呼ばれています。
+ApexSU はシステムパーティションの整合性を維持しながら、システムディレクトリを変更する効果を実現するモジュール機構を提供します。この機構は一般に「システムレス」と呼ばれています。
 
-KernelSU のモジュール機構は、Magisk とほぼ同じです。Magisk のモジュール開発に慣れている方であれば、KernelSU のモジュール開発も簡単でしょう。その場合は以下のモジュールの紹介は読み飛ばして、[Magisk との違い](difference-with-magisk.md)の内容だけ読めばOKです。
+ApexSU のモジュール機構は、Magisk とほぼ同じです。Magisk のモジュール開発に慣れている方であれば、ApexSU のモジュール開発も簡単でしょう。その場合は以下のモジュールの紹介は読み飛ばして、[Magisk との違い](difference-with-magisk.md)の内容だけ読めばOKです。
 
 ::: warning METAMODULE はシステムファイル変更時のみ必要
-KernelSU は [metamodule](metamodule.md) アーキテクチャを使用して `system` ディレクトリをマウントします。**モジュールが `/system` ファイルを変更する必要がある場合のみ**（`system` ディレクトリ経由で）、metamodule ([meta-overlayfs](https://github.com/tiann/KernelSU/releases)など) をインストールする必要があります。スクリプト、sepolicy ルール、system.propなどの他のモジュール機能は metamodule なしで動作します。
+ApexSU は [metamodule](metamodule.md) アーキテクチャを使用して `system` ディレクトリをマウントします。**モジュールが `/system` ファイルを変更する必要がある場合のみ**（`system` ディレクトリ経由で）、metamodule ([meta-overlayfs](https://github.com/qrjhamron/ApexSU/releases)など) をインストールする必要があります。スクリプト、sepolicy ルール、system.propなどの他のモジュール機能は metamodule なしで動作します。
 :::
 
 ## WebUI
 
-KernelSU modules support displaying interfaces and interacting with users. See the [WebUI documentation](module-webui.md) for more information.
+ApexSU modules support displaying interfaces and interacting with users. See the [WebUI documentation](module-webui.md) for more information.
 
 ## モジュール設定
 
-KernelSU は、モジュールが永続的または一時的なキー値設定を保存できる組み込みの設定システムを提供します。詳細については、[モジュール設定ドキュメント](module-config.md)を参照してください。
+ApexSU は、モジュールが永続的または一時的なキー値設定を保存できる組み込みの設定システムを提供します。詳細については、[モジュール設定ドキュメント](module-config.md)を参照してください。
 
 ## Busybox
 
-KernelSU には、機能的に完全な Busybox バイナリ (SELinux の完全サポートを含む) が同梱されています。実行ファイルは `/data/adb/ksu/bin/busybox` に配置されています。KernelSU の Busybox はランタイムに切り替え可能な「ASH スタンドアローンシェルモード」をサポートしています。このスタンドアロンモードとは、Busybox の `ash` シェルで実行する場合 `PATH` として設定されているものに関係なく、すべてのコマンドが Busybox 内のアプレットを直接使用するというものです。たとえば、`ls`、`rm`、`chmod` などのコマンドは、`PATH` にあるもの（Android の場合、デフォルトではそれぞれ `/system/bin/ls`, `/system/bin/rm`, `/system/bin/chmod`）ではなく、直接 Busybox 内部のアプレットを呼び出すことになります。これにより、スクリプトは常に予測可能な環境で実行され、どの Android バージョンで実行されていても常にコマンドを利用できます。Busybox を使用しないコマンドを強制的に実行するには、フルパスで実行ファイルを呼び出す必要があります。
+ApexSU には、機能的に完全な Busybox バイナリ (SELinux の完全サポートを含む) が同梱されています。実行ファイルは `/data/adb/ksu/bin/busybox` に配置されています。ApexSU の Busybox はランタイムに切り替え可能な「ASH スタンドアローンシェルモード」をサポートしています。このスタンドアロンモードとは、Busybox の `ash` シェルで実行する場合 `PATH` として設定されているものに関係なく、すべてのコマンドが Busybox 内のアプレットを直接使用するというものです。たとえば、`ls`、`rm`、`chmod` などのコマンドは、`PATH` にあるもの（Android の場合、デフォルトではそれぞれ `/system/bin/ls`, `/system/bin/rm`, `/system/bin/chmod`）ではなく、直接 Busybox 内部のアプレットを呼び出すことになります。これにより、スクリプトは常に予測可能な環境で実行され、どの Android バージョンで実行されていても常にコマンドを利用できます。Busybox を使用しないコマンドを強制的に実行するには、フルパスで実行ファイルを呼び出す必要があります。
 
-KernelSU のコンテキストで実行されるすべてのシェルスクリプトは、Busybox の `ash` シェルでスタンドアロンモードが有効な状態で実行されます。サードパーティの開発者に関係するものとしては、すべてのブートスクリプトとモジュールのインストールスクリプトが含まれます。
+ApexSU のコンテキストで実行されるすべてのシェルスクリプトは、Busybox の `ash` シェルでスタンドアロンモードが有効な状態で実行されます。サードパーティの開発者に関係するものとしては、すべてのブートスクリプトとモジュールのインストールスクリプトが含まれます。
 
-この「スタンドアロンモード」機能を KernelSU 以外で使用したい場合、2つの方法で有効にできます：
+この「スタンドアロンモード」機能を ApexSU 以外で使用したい場合、2つの方法で有効にできます：
 
 1. 環境変数 `ASH_STANDALONE` を `1` にする<br>例: `ASH_STANDALONE=1 /data/adb/ksu/bin/busybox sh <script>`
 2. コマンドラインのオプションで変更する:<br>`/data/adb/ksu/bin/busybox sh -o standalone <script>`
 
-環境変数が子プロセスに継承されるため、その後に実行されるすべての `sh` シェルもスタンドアロンモードで実行されるようにするにはオプション 1 が望ましい方法です（KernelSU と KernelSU Managerが内部的に使用しているのもこちらです）。
+環境変数が子プロセスに継承されるため、その後に実行されるすべての `sh` シェルもスタンドアロンモードで実行されるようにするにはオプション 1 が望ましい方法です（ApexSU と ApexSU Managerが内部的に使用しているのもこちらです）。
 
 ::: tip Magisk との違い
 
-KernelSU の Busybox は、Magisk プロジェクトから直接コンパイルされたバイナリファイルを使用するようになりました。Magisk と KernelSU の Busybox スクリプトはまったく同じものなので、互換性の問題を心配する必要はありません！
+ApexSU の Busybox は、Magisk プロジェクトから直接コンパイルされたバイナリファイルを使用するようになりました。Magisk と ApexSU の Busybox スクリプトはまったく同じものなので、互換性の問題を心配する必要はありません！
 :::
 
-## KernelSU モジュール
+## ApexSU モジュール
 
-KernelSU モジュールは、`/data/adb/modules` に配置された以下の構造を持つフォルダーです：
+ApexSU モジュールは、`/data/adb/modules` に配置された以下の構造を持つフォルダーです：
 
 ```txt
 /data/adb/modules
@@ -58,7 +58,7 @@ KernelSU モジュールは、`/data/adb/modules` に配置された以下の構
 │   │
 │   │      *** ステータスフラグ ***
 │   │
-│   ├── skip_mount          <--- 存在する場合、KernelSU はシステムフォルダをマウントしません
+│   ├── skip_mount          <--- 存在する場合、ApexSU はシステムフォルダをマウントしません
 │   ├── disable             <--- 存在する場合、モジュールは無効化されます
 │   ├── remove              <--- 存在する場合、次の再起動時にモジュールが削除されます
 │   │
@@ -66,7 +66,7 @@ KernelSU モジュールは、`/data/adb/modules` に配置された以下の構
 │   │
 │   ├── post-fs-data.sh     <--- このスクリプトは post-fs-data で実行されます
 │   ├── service.sh          <--- このスクリプトは late_start サービスで実行されます
-|   ├── uninstall.sh        <--- このスクリプトは KernelSU がモジュールを削除するときに実行されます
+|   ├── uninstall.sh        <--- このスクリプトは ApexSU がモジュールを削除するときに実行されます
 │   ├── system.prop         <--- このファイルのプロパティは resetprop によってシステムプロパティとして読み込まれます
 │   ├── sepolicy.rule       <--- カスタム SEPolicy ルールを追加します
 │   │
@@ -89,12 +89,12 @@ KernelSU モジュールは、`/data/adb/modules` に配置された以下の構
 ```
 
 ::: tip Magisk との違い
-KernelSU は Zygisk をビルトインでサポートしていないため、モジュール内に Zygisk に関連するコンテンツは存在しません。 しかし、[ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext) をインストールすれば Zygisk モジュールを使えます。その場合の Zygisk モジュールのコンテンツは Magisk と同じです。
+ApexSU は Zygisk をビルトインでサポートしていないため、モジュール内に Zygisk に関連するコンテンツは存在しません。 しかし、[ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext) をインストールすれば Zygisk モジュールを使えます。その場合の Zygisk モジュールのコンテンツは Magisk と同じです。
 :::
 
 ### module.prop
 
-module.prop はモジュールの設定ファイルです。KernelSU ではこのファイルを含まないモジュールは、モジュールとして認識されません。このファイルの形式は以下の通りです：
+module.prop はモジュールの設定ファイルです。ApexSU ではこのファイルを含まないモジュールは、モジュールとして認識されません。このファイルの形式は以下の通りです：
 
 ```txt
 id=<string>
@@ -127,7 +127,7 @@ webuiIcon=<path> (optional)
 モジュールのすべてのスクリプトでは、`MODDIR=${0%/*}`を使えばモジュールのベースディレクトリのパスを取得できます。スクリプト内でモジュールのパスをハードコードしないでください。
 
 ::: tip Magisk との違い
-環境変数 `KSU` を使用すると、スクリプトが KernelSU と Magisk どちらで実行されているかを判断できます。KernelSU で実行されている場合、この値は `true` に設定されます。
+環境変数 `KSU` を使用すると、スクリプトが ApexSU と Magisk どちらで実行されているかを判断できます。ApexSU で実行されている場合、この値は `true` に設定されます。
 :::
 
 ### `system` ディレクトリ
@@ -139,7 +139,7 @@ webuiIcon=<path> (optional)
 
 元のシステムディレクトリにあるファイルやフォルダを削除したい場合は、`mknod filename c 0 0` を使ってモジュールディレクトリにそのファイル/フォルダと同じ名前のファイルを作成する必要があります。こうすることで、OverlayFS システムはこのファイルを削除したかのように自動的に「ホワイトアウト」します（/system パーティションは実際には変更されません）。
 
-また、`customize.sh` 内で `REMOVE` という変数に削除操作を実行するディレクトリのリストを宣言すると、KernelSU は自動的にそのモジュールの対応するディレクトリで `mknod <TARGET> c 0 0` を実行します。例えば
+また、`customize.sh` 内で `REMOVE` という変数に削除操作を実行するディレクトリのリストを宣言すると、ApexSU は自動的にそのモジュールの対応するディレクトリで `mknod <TARGET> c 0 0` を実行します。例えば
 
 ```sh
 REMOVE="
@@ -152,7 +152,7 @@ REMOVE="
 
 システム内のディレクトリを置き換えたい場合は、モジュールディレクトリに同じパスのディレクトリを作成し、このディレクトリに `setfattr -n trusted.overlay.opaque -v y <TARGET>` という属性を設定する必要があります。こうすることで、OverlayFS システムは（/system パーティションを変更することなく）システム内の対応するディレクトリを自動的に置き換えることができます。
 
-`customize.sh` ファイル内に `REPLACE` という変数を宣言し、その中に置換するディレクトリのリストを入れておけば、KernelSU は自動的にモジュールディレクトリに対応した処理を行います。例えば：
+`customize.sh` ファイル内に `REPLACE` という変数を宣言し、その中に置換するディレクトリのリストを入れておけば、ApexSU は自動的にモジュールディレクトリに対応した処理を行います。例えば：
 
 REPLACE="
 /system/app/YouTube
@@ -163,7 +163,7 @@ REPLACE="
 
 ::: tip Magisk との違い
 
-KernelSU のシステムレスメカニズムはカーネルの OverlayFS によって実装され、Magisk は現在マジックマウント（bind mount）を使用しています。この2つの実装方法には大きな違いがありますが最終的な目的は同じで、/system パーティションを物理的に変更することなく、/system のファイルを変更できます。
+ApexSU のシステムレスメカニズムはカーネルの OverlayFS によって実装され、Magisk は現在マジックマウント（bind mount）を使用しています。この2つの実装方法には大きな違いがありますが最終的な目的は同じで、/system パーティションを物理的に変更することなく、/system のファイルを変更できます。
 :::
 
 OverlayFS に興味があれば、Linux カーネルの [OverlayFS のドキュメンテーション](https://docs.kernel.org/filesystems/overlayfs.html) を読んでみてください。
@@ -178,7 +178,7 @@ OverlayFS に興味があれば、Linux カーネルの [OverlayFS のドキュ�
 
 ## モジュールのインストーラー
 
-KernelSU モジュールインストーラーは、KernelSU Manager アプリでインストールできる、ZIP ファイルにパッケージされた KernelSU モジュールです。最もシンプルな KernelSU モジュールインストーラーは、KernelSU モジュールを ZIP ファイルとしてパックしただけのものです。
+ApexSU モジュールインストーラーは、ApexSU Manager アプリでインストールできる、ZIP ファイルにパッケージされた ApexSU モジュールです。最もシンプルな ApexSU モジュールインストーラーは、ApexSU モジュールを ZIP ファイルとしてパックしただけのものです。
 
 ```txt
 module.zip
@@ -191,7 +191,7 @@ module.zip
 ```
 
 ::: warning 警告
-KernelSU モジュールは、カスタムリカバリーからのインストールには非対応です！
+ApexSU モジュールは、カスタムリカバリーからのインストールには非対応です！
 :::
 
 ### カスタマイズ
@@ -200,15 +200,15 @@ KernelSU モジュールは、カスタムリカバリーからのインスト�
 
 インストールプロセスを完全に制御しカスタマイズしたい場合は、`customize.sh` で `SKIPUNZIP=1` と宣言すればデフォルトのインストールステップをすべてスキップできます。そうすることで、`customize.sh` が責任をもってすべてをインストールするようになります。
 
-`customize.sh`スクリプトは、KernelSU の Busybox `ash` シェルで、「スタンドアロンモード」を有効にして実行します。以下の変数と関数が利用可能です：
+`customize.sh`スクリプトは、ApexSU の Busybox `ash` シェルで、「スタンドアロンモード」を有効にして実行します。以下の変数と関数が利用可能です：
 
 #### 変数
 
-- `KSU` (bool): スクリプトが KernelSU 環境で実行されていることを示すための変数で、この変数の値は常に true になります。KernelSU と Magisk を区別するために使用できます。
-- `KSU_VER` (string): 現在インストールされている KernelSU のバージョン文字列 (例: `v0.4.0`)
-- `KSU_VER_CODE` (int): ユーザー空間に現在インストールされているKernelSUのバージョンコード (例: `10672`)
-- `KSU_KERNEL_VER_CODE` (int): 現在インストールされている KernelSU のカーネル空間でのバージョンコード（例：`10672`）
-- `BOOTMODE` (bool): KernelSU では常に `true` 
+- `KSU` (bool): スクリプトが ApexSU 環境で実行されていることを示すための変数で、この変数の値は常に true になります。ApexSU と Magisk を区別するために使用できます。
+- `KSU_VER` (string): 現在インストールされている ApexSU のバージョン文字列 (例: `v0.4.0`)
+- `KSU_VER_CODE` (int): ユーザー空間に現在インストールされているApexSUのバージョンコード (例: `10672`)
+- `KSU_KERNEL_VER_CODE` (int): 現在インストールされている ApexSU のカーネル空間でのバージョンコード（例：`10672`）
+- `BOOTMODE` (bool): ApexSU では常に `true` 
 - `MODPATH` (path): モジュールファイルがインストールされるパス
 - `TMPDIR` (path): ファイルを一時的に保存しておく場所
 - `ZIPFILE` (path): あなたのモジュールのインストールZIP
@@ -217,7 +217,7 @@ KernelSU モジュールは、カスタムリカバリーからのインスト�
 - `API` (int): 端末の API レベル・Android のバージョン（例：Android 6.0 なら`23`）
 
 ::: warning 警告
-KernelSU では、MAGISK_VER_CODE は常に25200、MAGISK_VER は常にv25.2です。この2つの変数で KernelSU 上で動作しているかどうかを判断するのはやめてください。
+ApexSU では、MAGISK_VER_CODE は常に25200、MAGISK_VER は常にv25.2です。この2つの変数で ApexSU 上で動作しているかどうかを判断するのはやめてください。
 :::
 
 #### 機能
@@ -248,7 +248,7 @@ set_perm_recursive <directory> <owner> <group> <dirpermission> <filepermission> 
 
 ## ブートスクリプト
 
-KernelSU では、スクリプトは実行モードによって post-fs-data モードと late_start サービスモードの2種類に分けられます：
+ApexSU では、スクリプトは実行モードによって post-fs-data モードと late_start サービスモードの2種類に分けられます：
 
 - post-fs-data モード
   - 同期処理です。実行が終わるか、10秒が経過するまでブートプロセスが一時停止されます。
@@ -260,7 +260,7 @@ KernelSU では、スクリプトは実行モードによって post-fs-data モ
   - 非同期処理です。スクリプトは、起動プロセスの残りの部分と並行して実行されます。
   - **ほとんどのスクリプトにはこちらがおすすめです**
 
-KernelSU では、起動スクリプトは保存場所によって一般スクリプトとモジュールスクリプトの2種類に分けられます：
+ApexSU では、起動スクリプトは保存場所によって一般スクリプトとモジュールスクリプトの2種類に分けられます：
 
 - 一般スクリプト
   - `/data/adb/post-fs-data.d` か `/data/adb/service.d` に配置されます
@@ -272,4 +272,4 @@ KernelSU では、起動スクリプトは保存場所によって一般スク�
   - モジュールが有効な場合のみ実行されます
   - `post-fs-data.sh` は post-fs-data モードで実行され、`service.sh` は late_start サービスモードで実行されます
 
-すべてのブートスクリプトは、KernelSU の Busybox `ash` シェルで「スタンドアロンモード」を有効にした状態で実行されます。
+すべてのブートスクリプトは、ApexSU の Busybox `ash` シェルで「スタンドアロンモード」を有効にした状態で実行されます。

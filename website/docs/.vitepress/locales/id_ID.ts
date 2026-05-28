@@ -1,14 +1,11 @@
-import { createRequire } from 'module'
 import { defineConfig } from 'vitepress'
-
-const require = createRequire(import.meta.url)
-const pkg = require('vitepress/package.json')
 
 export default defineConfig({
   lang: 'id-ID',
   description: 'Solusi root kernel-based untuk perangkat Android GKI.',
 
   themeConfig: {
+    logo: '/logo.svg',
     nav: nav(),
 
     lastUpdatedText: 'Update Terakhir',
@@ -22,7 +19,7 @@ export default defineConfig({
     ],
 
     footer: {
-        message: 'Rilis Dibawah Lisensi GPL3.',
+        message: 'Telegram: @smoothlady',
         copyright: 'Copyright © 2022-Sekarang pengembang ApexSU.'
     },
 
@@ -35,7 +32,9 @@ export default defineConfig({
 
 function nav() {
   return [
-    { text: 'Petunjuk', link: '/id_ID/guide/what-is-kernelsu' },
+    { text: 'Petunjuk', link: '/id_ID/guide/what-is-apexsu' },
+    { text: 'Unduh', link: 'https://github.com/qrjhamron/ApexSU/releases' },
+    { text: '@smoothlady', link: 'https://t.me/smoothlady' }
   ]
 }
 
@@ -44,8 +43,9 @@ function sidebarGuide() {
     {
         text: 'Petunjuk',
         items: [
-          { text: 'Apa itu ApexSU?', link: '/id_ID/guide/what-is-kernelsu' },
+          { text: 'Apa itu ApexSU?', link: '/id_ID/guide/what-is-apexsu' },
           { text: 'Instalasi', link: '/id_ID/guide/installation' },
+          { text: 'Kebijakan dukungan GKI', link: '/id_ID/guide/how-to-integrate-for-non-gki' },
           { text: 'Bagaimana cara buildnya?', link: '/id_ID/guide/how-to-build' },
           { text: 'Petunjuk module', link: '/id_ID/guide/module.md' },
           { text: 'Metamodule', link: '/id_ID/guide/metamodule.md' },

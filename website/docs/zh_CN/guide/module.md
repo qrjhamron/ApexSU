@@ -1,48 +1,48 @@
 # 模块开发指南 {#introduction}
 
-KernelSU 提供了一个模块机制，它可以在保持系统分区完整性的同时达到修改系统分区的效果；这种机制通常被称之为 systemless。
+ApexSU 提供了一个模块机制，它可以在保持系统分区完整性的同时达到修改系统分区的效果；这种机制通常被称之为 systemless。
 
-KernelSU 的模块运作机制与 Magisk 几乎是一样的，如果你熟悉 Magisk 模块的开发，那么开发 KernelSU 的模块大同小异，你可以跳过下面有关模块的介绍，只需要了解 [KernelSU 模块与 Magisk 模块的异同](difference-with-magisk.md)。
+ApexSU 的模块运作机制与 Magisk 几乎是一样的，如果你熟悉 Magisk 模块的开发，那么开发 ApexSU 的模块大同小异，你可以跳过下面有关模块的介绍，只需要了解 [ApexSU 模块与 Magisk 模块的异同](difference-with-magisk.md)。
 
 ::: warning 仅修改系统文件需要 METAMODULE
-KernelSU 使用 [metamodule](metamodule.md) 架构来挂载 `system` 目录。**只有当您的模块需要修改 `/system` 文件**（通过 `system` 目录）时，才需要安装 metamodule（例如 [meta-overlayfs](https://github.com/tiann/KernelSU/releases)）。其他模块功能如脚本、sepolicy 规则和 system.prop 无需 metamodule 即可工作。
+ApexSU 使用 [metamodule](metamodule.md) 架构来挂载 `system` 目录。**只有当您的模块需要修改 `/system` 文件**（通过 `system` 目录）时，才需要安装 metamodule（例如 [meta-overlayfs](https://github.com/qrjhamron/ApexSU/releases)）。其他模块功能如脚本、sepolicy 规则和 system.prop 无需 metamodule 即可工作。
 :::
 
 ## 模块界面
 
-KernelSU 的模块支持显示界面并与用户交互，请参阅 [WebUI 文档](module-webui.md)。
+ApexSU 的模块支持显示界面并与用户交互，请参阅 [WebUI 文档](module-webui.md)。
 
 ## 模块配置
 
-KernelSU 提供了一个内置的配置系统，允许模块存储持久化或临时的键值设置。详情请参阅[模块配置文档](module-config.md)。
+ApexSU 提供了一个内置的配置系统，允许模块存储持久化或临时的键值设置。详情请参阅[模块配置文档](module-config.md)。
 
 ## Busybox
 
-KernelSU 提供了一个功能完备的 BusyBox 二进制文件（包括完整的 SELinux 支持）。可执行文件位于 `/data/adb/ksu/bin/busybox`。
-KernelSU 的 BusyBox 支持运行时可切换的 "ASH Standalone Shell Mode"。
+ApexSU 提供了一个功能完备的 BusyBox 二进制文件（包括完整的 SELinux 支持）。可执行文件位于 `/data/adb/ksu/bin/busybox`。
+ApexSU 的 BusyBox 支持运行时可切换的 "ASH Standalone Shell Mode"。
 这种独立模式意味着在运行 BusyBox 的 ash shell 时，每个命令都会直接使用 BusyBox 中内置的应用程序，而不管 PATH 设置为什么。
 例如，`ls`、`rm`、`chmod` 等命令将不会使用 PATH 中设置的命令（在 Android 的情况下，默认情况下分别为 `/system/bin/ls`、`/system/bin/rm` 和 `/system/bin/chmod`），而是直接调用 BusyBox 内置的应用程序。
 这确保了脚本始终在可预测的环境中运行，并始终具有完整的命令套件，无论它运行在哪个 Android 版本上。
 要强制一个命令不使用 BusyBox，你必须使用完整路径调用可执行文件。
 
-在 KernelSU 上下文中运行的每个 shell 脚本都将在 BusyBox 的 ash shell 中以独立模式运行。对于第三方开发者相关的内容，包括所有启动脚本和模块安装脚本。
+在 ApexSU 上下文中运行的每个 shell 脚本都将在 BusyBox 的 ash shell 中以独立模式运行。对于第三方开发者相关的内容，包括所有启动脚本和模块安装脚本。
 
-对于想要在 KernelSU 之外使用这个“独立模式”功能的用户，有两种启用方法:
+对于想要在 ApexSU 之外使用这个“独立模式”功能的用户，有两种启用方法:
 
 1. 设置环境变量 `ASH_STANDALONE` 为 `1`。例如：`ASH_STANDALONE=1 /data/adb/ksu/bin/busybox sh <script>`
 2. 使用命令行选项切换：`/data/adb/ksu/bin/busybox sh -o standalone <script>`
 
-为了确保所有后续的 `sh` shell 都在独立模式下执行，第一种是首选方法（这也是 KernelSU 和 KernelSU 管理器内部使用的方法），因为环境变量会被继承到子进程中。
+为了确保所有后续的 `sh` shell 都在独立模式下执行，第一种是首选方法（这也是 ApexSU 和 ApexSU 管理器内部使用的方法），因为环境变量会被继承到子进程中。
 
 ::: tip 与 Magisk 的差异
 
-KernelSU 的 BusyBox 现在是直接使用 Magisk 项目编译的二进制文件，**感谢 Magisk！**
-因此，你完全不用担心 BusyBox 脚本与在 Magisk 和 KernelSU 之间的兼容问题，因为他们是完全一样的！
+ApexSU 的 BusyBox 现在是直接使用 Magisk 项目编译的二进制文件，**感谢 Magisk！**
+因此，你完全不用担心 BusyBox 脚本与在 Magisk 和 ApexSU 之间的兼容问题，因为他们是完全一样的！
 :::
 
-## KernelSU 模块 {#kernelsu-modules}
+## ApexSU 模块 {#apexsu-modules}
 
-KernelSU 模块就是一个放置在 `/data/adb/modules` 内且满足如下结构的文件夹：
+ApexSU 模块就是一个放置在 `/data/adb/modules` 内且满足如下结构的文件夹：
 
 ```txt
 /data/adb/modules
@@ -97,12 +97,12 @@ KernelSU 模块就是一个放置在 `/data/adb/modules` 内且满足如下结�
 ```
 
 ::: tip 与 Magisk 的差异
-KernelSU 没有内置的针对 Zygisk 的支持，因此模块中没有 Zygisk 相关的内容，但你可以通过 [ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext) 来支持 Zygisk 模块，此时 Zygisk 模块的内容与 Magisk 所支持的 Zygisk 是完全相同的。
+ApexSU 没有内置的针对 Zygisk 的支持，因此模块中没有 Zygisk 相关的内容，但你可以通过 [ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext) 来支持 Zygisk 模块，此时 Zygisk 模块的内容与 Magisk 所支持的 Zygisk 是完全相同的。
 :::
 
 ### module.prop
 
-module.prop 是一个模块的配置文件，在 KernelSU 中如果模块中不包含此文件，那么它将不被认为是一个模块；此文件的格式如下：
+module.prop 是一个模块的配置文件，在 ApexSU 中如果模块中不包含此文件，那么它将不被认为是一个模块；此文件的格式如下：
 
 ```txt
 id=<string>
@@ -136,7 +136,7 @@ webuiIcon=<path> (optional)
 在您的模块的所有脚本中，请使用`MODDIR=${0%/*}`来获取您的模块的基本目录路径；请勿在脚本中硬编码您的模块路径。
 
 :::tip 与 Magisk 的差异
-你可以通过环境变量 `KSU` 来判断脚本是运行在 KernelSU 还是 Magisk 中，如果运行在 KernelSU，这个值会被设置为 `true`。
+你可以通过环境变量 `KSU` 来判断脚本是运行在 ApexSU 还是 Magisk 中，如果运行在 ApexSU，这个值会被设置为 `true`。
 :::
 
 ### `system` 目录 {#system-directories}
@@ -148,7 +148,7 @@ webuiIcon=<path> (optional)
 
 如果你想删掉系统原来目录某个文件或者文件夹，你需要在模块目录通过 `mknod filename c 0 0` 来创建一个 `filename` 的同名文件；这样 overlayfs 系统会自动 whiteout 等效删除此文件（`/system` 分区并没有被更改）。
 
-你也可以在 `customize.sh` 中声明一个名为 `REMOVE` 并且包含一系列目录的变量来执行删除操作，KernelSU 会自动为你在模块对应目录执行 `mknod <TARGET> c 0 0`。例如：
+你也可以在 `customize.sh` 中声明一个名为 `REMOVE` 并且包含一系列目录的变量来执行删除操作，ApexSU 会自动为你在模块对应目录执行 `mknod <TARGET> c 0 0`。例如：
 
 ```sh
 REMOVE="
@@ -161,7 +161,7 @@ REMOVE="
 
 如果你想替换掉系统的某个目录，你需要在模块目录创建一个相同路径的目录，然后为此目录设置此属性：`setfattr -n trusted.overlay.opaque -v y <TARGET>`；这样 overlayfs 系统会自动将系统内相应目录替换（`/system` 分区并没有被更改）。
 
-你可以在 `customize.sh` 中声明一个名为 `REPLACE` 并且包含一系列目录的变量来执行替换操作，KernelSU 会自动为你在模块对应目录执行相关操作。例如：
+你可以在 `customize.sh` 中声明一个名为 `REPLACE` 并且包含一系列目录的变量来执行替换操作，ApexSU 会自动为你在模块对应目录执行相关操作。例如：
 
 ```sh
 REPLACE="
@@ -174,7 +174,7 @@ REPLACE="
 
 ::: tip 与 Magisk 的差异
 
-KernelSU 的 systemless 机制是通过内核的 overlayfs 实现的，而 Magisk 当前则是通过 magic mount (bind mount)，二者实现方式有着巨大的差异，但最终的目标实际上是一致的：不修改物理的 `/system` 分区但实现修改 `/system` 文件。
+ApexSU 的 systemless 机制是通过内核的 overlayfs 实现的，而 Magisk 当前则是通过 magic mount (bind mount)，二者实现方式有着巨大的差异，但最终的目标实际上是一致的：不修改物理的 `/system` 分区但实现修改 `/system` 文件。
 :::
 
 如果你对 overlayfs 感兴趣，建议阅读 Linux Kernel 关于 [overlayfs 的文档](https://docs.kernel.org/filesystems/overlayfs.html)
@@ -189,7 +189,7 @@ KernelSU 的 systemless 机制是通过内核的 overlayfs 实现的，而 Magis
 
 ## 模块安装包 {#module-installer}
 
-KernelSU 的模块安装包就是一个可以通过 KernelSU 管理器 APP 刷入的 zip 文件，此 zip 文件的格式如下：
+ApexSU 的模块安装包就是一个可以通过 ApexSU 管理器 APP 刷入的 zip 文件，此 zip 文件的格式如下：
 
 ```txt
 module.zip
@@ -202,7 +202,7 @@ module.zip
 ```
 
 :::warning
-KernelSU 模块不支持在 Recovery 中安装！！
+ApexSU 模块不支持在 Recovery 中安装！！
 :::
 
 ### 定制安装过程 {#customizing-installation}
@@ -211,15 +211,15 @@ KernelSU 模块不支持在 Recovery 中安装！！
 
 如果你想完全控制脚本的安装过程，你可以在 `customize.sh` 中声明 `SKIPUNZIP=1` 来跳过所有的默认安装步骤；此时，你需要自行处理所有安装过程（如解压模块，设置权限等）
 
-`customize.sh` 脚本以“独立模式”运行在 KernelSU 的 BusyBox `ash` shell 中。你可以使用如下变量和函数：
+`customize.sh` 脚本以“独立模式”运行在 ApexSU 的 BusyBox `ash` shell 中。你可以使用如下变量和函数：
 
 #### 变量 {#variables}
 
-- `KSU` (bool): 标记此脚本运行在 KernelSU 环境下，此变量的值将永远为 `true`，你可以通过它区分 Magisk。
-- `KSU_VER` (string): KernelSU 当前的版本名字 (如： `v0.4.0`)
-- `KSU_VER_CODE` (int): KernelSU 用户空间当前的版本号 (如. `10672`)
-- `KSU_KERNEL_VER_CODE` (int): KernelSU 内核空间当前的版本号 (如. `10672`)
-- `BOOTMODE` (bool): 此变量在 KernelSU 中永远为 `true`
+- `KSU` (bool): 标记此脚本运行在 ApexSU 环境下，此变量的值将永远为 `true`，你可以通过它区分 Magisk。
+- `KSU_VER` (string): ApexSU 当前的版本名字 (如： `v0.4.0`)
+- `KSU_VER_CODE` (int): ApexSU 用户空间当前的版本号 (如. `10672`)
+- `KSU_KERNEL_VER_CODE` (int): ApexSU 内核空间当前的版本号 (如. `10672`)
+- `BOOTMODE` (bool): 此变量在 ApexSU 中永远为 `true`
 - `MODPATH` (path): 当前模块的安装目录
 - `TMPDIR` (path): 可以存放临时文件的目录
 - `ZIPFILE` (path): 当前模块的安装包文件
@@ -228,7 +228,7 @@ KernelSU 模块不支持在 Recovery 中安装！！
 - `API` (int): 当前设备的 Android API 版本 (如：Android 6.0 上为 `23`)
 
 ::: warning
-`MAGISK_VER_CODE` 在 KernelSU 中永远为 `25200`，`MAGISK_VER` 则为 `v25.2`，请不要通过这两个变量来判断是否是 KernelSU！
+`MAGISK_VER_CODE` 在 ApexSU 中永远为 `25200`，`MAGISK_VER` 则为 `v25.2`，请不要通过这两个变量来判断是否是 ApexSU！
 :::
 
 #### 函数 {#functions}
@@ -259,7 +259,7 @@ set_perm_recursive <directory> <owner> <group> <dirpermission> <filepermission> 
 
 ## 启动脚本 {#boot-scripts}
 
-在 KernelSU 中，根据脚本运行模式的不同分为两种：post-fs-data 模式和 late_start 服务模式。
+在 ApexSU 中，根据脚本运行模式的不同分为两种：post-fs-data 模式和 late_start 服务模式。
 
 - post-fs-data 模式
   - 这个阶段是阻塞的。在执行完成之前或者 10 秒钟之后，启动过程会暂停。
@@ -272,7 +272,7 @@ set_perm_recursive <directory> <owner> <group> <dirpermission> <filepermission> 
   - 这个阶段是非阻塞的。你的脚本会与其余的启动过程**并行**运行。
   - **大多数脚本都建议在这种模式下运行**。
 
-在 KernelSU 中，启动脚本根据存放位置的不同还分为两种：通用脚本和模块脚本。
+在 ApexSU 中，启动脚本根据存放位置的不同还分为两种：通用脚本和模块脚本。
 
 - 通用脚本
   - 放置在 `/data/adb/post-fs-data.d`, `/data/adb/post-mount.d`, `/data/adb/service.d` 或 `/data/adb/boot-completed.d` 中。
@@ -285,23 +285,23 @@ set_perm_recursive <directory> <owner> <group> <dirpermission> <filepermission> 
   - 只有当模块被启用时才会执行。
   - `post-fs-data.sh` 以 post-fs-data 模式运行，`post-mount.sh` 以 post-mount 模式运行，而 `service.sh` 则以 late_start 服务模式运行，`boot-completed` 在 Android 系统启动完毕后以服务模式运行。
 
-所有启动脚本都将在 KernelSU 的 BusyBox ash shell 中运行，并启用“独立模式”。
+所有启动脚本都将在 ApexSU 的 BusyBox ash shell 中运行，并启用“独立模式”。
 
 ### 启动脚本的流程解疑 {#Boot-scripts-process-explanation}
 
-以下是 Android 的相关启动流程（部分省略），其中包括了 KernelSU 的操作（带前导星号），应该能帮助你更好地理解这些启动脚本的用途：
+以下是 Android 的相关启动流程（部分省略），其中包括了 ApexSU 的操作（带前导星号），应该能帮助你更好地理解这些启动脚本的用途：
 
 ```txt
 0. Bootloader (nothing on screen)
 load patched boot.img
 load kernel:
-    - GKI mode: GKI kernel with KernelSU integrated
+    - GKI mode: GKI kernel with ApexSU integrated
     - LKM mode: stock kernel
 ...
 
 1. kernel exec init (oem logo on screen):
     - GKI mode: stock init
-    - LKM mode: exec ksuinit, insmod kernelsu.ko, exec stock init
+    - LKM mode: exec ksuinit, insmod apexsu.ko, exec stock init
 mount /dev, /dev/pts, /proc, /sys, etc.
 property-init -> read default props
 read init.rc

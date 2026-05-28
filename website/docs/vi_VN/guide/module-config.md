@@ -1,6 +1,6 @@
 # Cấu hình module
 
-KernelSU cung cấp hệ thống cấu hình tích hợp cho phép các module lưu trữ các cài đặt key-value liên tục hoặc tạm thời. Cấu hình được lưu trữ ở định dạng nhị phân tại `/data/adb/ksu/module_configs/<module_id>/` với các đặc điểm sau:
+ApexSU cung cấp hệ thống cấu hình tích hợp cho phép các module lưu trữ các cài đặt key-value liên tục hoặc tạm thời. Cấu hình được lưu trữ ở định dạng nhị phân tại `/data/adb/ksu/module_configs/<module_id>/` với các đặc điểm sau:
 
 ## Các loại cấu hình
 
@@ -108,7 +108,7 @@ Khi lấy danh sách mô-đun, nếu cấu hình `override.description` tồn t�
 
 ### Khai báo Tính năng được Quản lý
 
-Các mô-đun có thể khai báo tính năng KernelSU nào mà chúng quản lý bằng cách sử dụng mẫu cấu hình `manage.<feature>`. Các tính năng được hỗ trợ tương ứng với enum nội bộ `FeatureId` của KernelSU:
+Các mô-đun có thể khai báo tính năng ApexSU nào mà chúng quản lý bằng cách sử dụng mẫu cấu hình `manage.<feature>`. Các tính năng được hỗ trợ tương ứng với enum nội bộ `FeatureId` của ApexSU:
 
 **Tính năng được Hỗ trợ:**
 - `su_compat` - Chế độ tương thích SU
@@ -131,10 +131,10 @@ ksud module config delete manage.su_compat
 - Để ngừng quản lý một tính năng, xóa hoàn toàn khóa cấu hình
 
 Các tính năng được quản lý được hiển thị thông qua API danh sách mô-đun dưới dạng trường `managedFeatures` (chuỗi phân tách bằng dấu phẩy). Điều này cho phép:
-- Trình quản lý KernelSU phát hiện mô-đun nào quản lý tính năng KernelSU nào
+- Trình quản lý ApexSU phát hiện mô-đun nào quản lý tính năng ApexSU nào
 - Ngăn chặn xung đột khi nhiều mô-đun cố gắng quản lý cùng một tính năng
-- Phối hợp tốt hơn giữa các mô-đun và chức năng cốt lõi của KernelSU
+- Phối hợp tốt hơn giữa các mô-đun và chức năng cốt lõi của ApexSU
 
 ::: warning CHỈ CÁC TÍNH NĂNG ĐƯỢC HỖ TRỢ
-Chỉ sử dụng các tên tính năng được xác định trước được liệt kê ở trên (`su_compat`, `kernel_umount`). Chúng tương ứng với các tính năng nội bộ thực tế của KernelSU. Sử dụng các tên tính năng khác sẽ không gây lỗi nhưng không có mục đích chức năng nào.
+Chỉ sử dụng các tên tính năng được xác định trước được liệt kê ở trên (`su_compat`, `kernel_umount`). Chúng tương ứng với các tính năng nội bộ thực tế của ApexSU. Sử dụng các tên tính năng khác sẽ không gây lỗi nhưng không có mục đích chức năng nào.
 :::

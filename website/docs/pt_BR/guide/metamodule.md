@@ -1,12 +1,12 @@
 # Metamódulo
 
-Metamódulos são um recurso revolucionário no KernelSU que transfere recursos críticos do sistema de módulos do daemon principal para módulos plugáveis. Essa mudança arquitetônica mantém a estabilidade e segurança do KernelSU enquanto libera um maior potencial de inovação para o ecossistema de módulos.
+Metamódulos são um recurso revolucionário no ApexSU que transfere recursos críticos do sistema de módulos do daemon principal para módulos plugáveis. Essa mudança arquitetônica mantém a estabilidade e segurança do ApexSU enquanto libera um maior potencial de inovação para o ecossistema de módulos.
 
 ## O que é um Metamódulo?
 
-Um metamódulo é um tipo especial de módulo KernelSU que fornece funcionalidade de infraestrutura central para o sistema de módulos. Ao contrário dos módulos regulares que modificam arquivos do sistema, os metamódulos controlam *como* os módulos regulares são instalados e montados.
+Um metamódulo é um tipo especial de módulo ApexSU que fornece funcionalidade de infraestrutura central para o sistema de módulos. Ao contrário dos módulos regulares que modificam arquivos do sistema, os metamódulos controlam *como* os módulos regulares são instalados e montados.
 
-Metamódulos são um mecanismo de extensão baseado em plugins que permite a personalização completa da infraestrutura de gerenciamento de módulos do KernelSU. Ao delegar a lógica de montagem e instalação aos metamódulos, o KernelSU evita se tornar um ponto de detecção frágil enquanto permite diversas estratégias de implementação.
+Metamódulos são um mecanismo de extensão baseado em plugins que permite a personalização completa da infraestrutura de gerenciamento de módulos do ApexSU. Ao delegar a lógica de montagem e instalação aos metamódulos, o ApexSU evita se tornar um ponto de detecção frágil enquanto permite diversas estratégias de implementação.
 
 **Características principais:**
 
@@ -17,13 +17,13 @@ Metamódulos são um mecanismo de extensão baseado em plugins que permite a per
 
 ## Por que Metamódulos?
 
-Soluções root tradicionais incorporam a lógica de montagem em seu núcleo, tornando-as mais fáceis de detectar e mais difíceis de evoluir. A arquitetura de metamódulos do KernelSU resolve esses problemas através da separação de preocupações.
+Soluções root tradicionais incorporam a lógica de montagem em seu núcleo, tornando-as mais fáceis de detectar e mais difíceis de evoluir. A arquitetura de metamódulos do ApexSU resolve esses problemas através da separação de preocupações.
 
 **Vantagens estratégicas:**
 
-- **Superfície de detecção reduzida**: O próprio KernelSU não realiza montagens, reduzindo vetores de detecção
+- **Superfície de detecção reduzida**: O próprio ApexSU não realiza montagens, reduzindo vetores de detecção
 - **Estabilidade**: O daemon central permanece estável enquanto as implementações de montagem podem evoluir
-- **Inovação**: A comunidade pode desenvolver estratégias alternativas de montagem sem bifurcar o KernelSU
+- **Inovação**: A comunidade pode desenvolver estratégias alternativas de montagem sem bifurcar o ApexSU
 - **Escolha**: Os usuários podem selecionar a implementação que melhor se adapta às suas necessidades
 
 **Flexibilidade de montagem:**
@@ -35,12 +35,12 @@ Soluções root tradicionais incorporam a lógica de montagem em seu núcleo, to
 
 **Além da montagem:**
 
-- **Extensibilidade**: Adicione recursos como suporte a módulos do kernel sem modificar o núcleo do KernelSU
-- **Modularidade**: Atualize implementações independentemente das versões do KernelSU
+- **Extensibilidade**: Adicione recursos como suporte a módulos do kernel sem modificar o núcleo do ApexSU
+- **Modularidade**: Atualize implementações independentemente das versões do ApexSU
 - **Personalização**: Crie soluções especializadas para dispositivos ou casos de uso específicos
 
 ::: warning IMPORTANTE
-Sem um metamódulo instalado, os módulos **NÃO** serão montados. Instalações novas do KernelSU requerem a instalação de um metamódulo (como `meta-overlayfs`) para que os módulos funcionem.
+Sem um metamódulo instalado, os módulos **NÃO** serão montados. Instalações novas do ApexSU requerem a instalação de um metamódulo (como `meta-overlayfs`) para que os módulos funcionem.
 :::
 
 ## Para Usuários
@@ -50,7 +50,7 @@ Sem um metamódulo instalado, os módulos **NÃO** serão montados. Instalaçõe
 Instale um metamódulo da mesma forma que módulos regulares:
 
 1. Baixe o arquivo ZIP do metamódulo (por exemplo, `meta-overlayfs.zip`)
-2. Abra o aplicativo KernelSU Manager
+2. Abra o aplicativo ApexSU Manager
 3. Toque no botão de ação flutuante (➕)
 4. Selecione o arquivo ZIP do metamódulo
 5. Reinicie seu dispositivo
@@ -59,7 +59,7 @@ O metamódulo `meta-overlayfs` é a implementação de referência oficial que f
 
 ### Verificando o Metamódulo Ativo
 
-Você pode verificar qual metamódulo está atualmente ativo na página de Módulos do aplicativo KernelSU Manager. O metamódulo ativo será exibido na sua lista de módulos com sua designação especial.
+Você pode verificar qual metamódulo está atualmente ativo na página de Módulos do aplicativo ApexSU Manager. O metamódulo ativo será exibido na sua lista de módulos com sua designação especial.
 
 ### Desinstalando um Metamódulo
 
@@ -69,7 +69,7 @@ Desinstalar um metamódulo afetará **TODOS** os módulos. Após a remoção, os
 
 Para desinstalar:
 
-1. Abra o KernelSU Manager
+1. Abra o ApexSU Manager
 2. Encontre o metamódulo na sua lista de módulos
 3. Toque em desinstalar (você verá um aviso especial)
 4. Confirme a ação
@@ -79,7 +79,7 @@ Após desinstalar, você deve instalar outro metamódulo se quiser que os módul
 
 ### Restrição de Metamódulo Único
 
-Apenas um metamódulo pode ser instalado por vez. Se você tentar instalar um segundo metamódulo, o KernelSU impedirá a instalação para evitar conflitos.
+Apenas um metamódulo pode ser instalado por vez. Se você tentar instalar um segundo metamódulo, o ApexSU impedirá a instalação para evitar conflitos.
 
 Para trocar metamódulos:
 
@@ -92,7 +92,7 @@ Para trocar metamódulos:
 
 ## Para Desenvolvedores de Módulos
 
-Se você está desenvolvendo módulos KernelSU regulares, não precisa se preocupar muito com metamódulos. Seus módulos funcionarão desde que os usuários tenham um metamódulo compatível (como `meta-overlayfs`) instalado.
+Se você está desenvolvendo módulos ApexSU regulares, não precisa se preocupar muito com metamódulos. Seus módulos funcionarão desde que os usuários tenham um metamódulo compatível (como `meta-overlayfs`) instalado.
 
 **O que você precisa saber:**
 
@@ -100,12 +100,12 @@ Se você está desenvolvendo módulos KernelSU regulares, não precisa se preocu
 - **Nenhuma alteração de código necessária**: Módulos existentes continuam a funcionar sem modificação
 
 ::: tip
-Se você está familiarizado com o desenvolvimento de módulos Magisk, seus módulos funcionarão da mesma forma no KernelSU quando o metamódulo estiver instalado, pois ele fornece montagem compatível com Magisk.
+Se você está familiarizado com o desenvolvimento de módulos Magisk, seus módulos funcionarão da mesma forma no ApexSU quando o metamódulo estiver instalado, pois ele fornece montagem compatível com Magisk.
 :::
 
 ## Para Desenvolvedores de Metamódulos
 
-Criar um metamódulo permite que você personalize como o KernelSU lida com instalação de módulos, montagem e desinstalação.
+Criar um metamódulo permite que você personalize como o ApexSU lida com instalação de módulos, montagem e desinstalação.
 
 ### Requisitos Básicos
 
@@ -161,7 +161,7 @@ Metamódulos podem fornecer até três scripts de hook especiais:
 **Variáveis de ambiente:**
 
 - `MODDIR`: O caminho do diretório do metamódulo (por exemplo, `/data/adb/modules/my_metamodule`)
-- Todas as variáveis de ambiente padrão do KernelSU
+- Todas as variáveis de ambiente padrão do ApexSU
 
 **Responsabilidades:**
 
@@ -170,7 +170,7 @@ Metamódulos podem fornecer até três scripts de hook especiais:
 - Lidar com requisitos específicos de montagem de módulos
 
 ::: danger REQUISITO CRÍTICO
-Ao realizar operações de montagem, você **DEVE** definir o nome da origem/dispositivo como `"KSU"`. Isso identifica as montagens como pertencentes ao KernelSU.
+Ao realizar operações de montagem, você **DEVE** definir o nome da origem/dispositivo como `"KSU"`. Isso identifica as montagens como pertencentes ao ApexSU.
 
 **Exemplo (correto):**
 
@@ -184,7 +184,7 @@ mount -t overlay -o lowerdir=/lower,upperdir=/upper,workdir=/work KSU /target
 fsconfig_set_string(fs, "source", "KSU")?;
 ```
 
-Isso é essencial para o KernelSU identificar e gerenciar adequadamente suas montagens.
+Isso é essencial para o ApexSU identificar e gerenciar adequadamente suas montagens.
 :::
 
 **Script de exemplo:**
@@ -303,7 +303,7 @@ estágio boot-completed:
 
 ### Mecanismo de Symlink
 
-Quando um metamódulo é instalado, o KernelSU cria um symlink:
+Quando um metamódulo é instalado, o ApexSU cria um symlink:
 
 ```sh
 /data/adb/metamodule -> /data/adb/modules/<metamodule_id>
@@ -393,7 +393,7 @@ Ao desenvolver metamódulos:
 
 Antes de lançar:
 
-1. **Teste a instalação** em uma configuração limpa do KernelSU
+1. **Teste a instalação** em uma configuração limpa do ApexSU
 2. **Verifique a montagem** com vários tipos de módulos
 3. **Verifique a compatibilidade** com módulos comuns
 4. **Teste a desinstalação** e limpeza
@@ -425,5 +425,5 @@ Não. Ele fornece montagem overlayfs padrão compatível com a maioria dos módu
 ## Veja Também
 
 - [Guia de Módulos](module.md) - Desenvolvimento geral de módulos
-- [Diferença com Magisk](difference-with-magisk.md) - Comparando KernelSU e Magisk
-- [Como Compilar](how-to-build.md) - Compilando KernelSU a partir do código-fonte
+- [Diferença com Magisk](difference-with-magisk.md) - Comparando ApexSU e Magisk
+- [Como Compilar](how-to-build.md) - Compilando ApexSU a partir do código-fonte

@@ -1,7 +1,7 @@
 {
     "id":"incompetent.root",
     "name":"Incompetent root",
-    "author":"kernelsu.org",
+    "author":"qrjhamron.github.io/ApexSU",
     "description":"A incompetent root user without any capability.",
     "uid":0,
     "gid":0,

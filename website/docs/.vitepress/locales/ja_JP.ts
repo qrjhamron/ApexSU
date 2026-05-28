@@ -1,14 +1,11 @@
-import { createRequire } from 'module'
 import { defineConfig } from 'vitepress'
-
-const require = createRequire(import.meta.url)
-const pkg = require('vitepress/package.json')
 
 export default defineConfig({
   lang: 'ja-JP',
   description: 'Android GKI デバイス向けのカーネルベースの root ソリューション',
 
   themeConfig: {
+    logo: '/logo.svg',
     nav: nav(),
 
     lastUpdatedText: '最終更新',
@@ -18,16 +15,16 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/tiann/KernelSU' }
+      { icon: 'github', link: 'https://github.com/qrjhamron/ApexSU' }
     ],
 
     footer: {
-      message: 'GPL3 ライセンスでリリースされています。',
-      copyright: 'Copyright © 2022-現在 KernelSU 開発者。'
+      message: 'Telegram: @smoothlady',
+      copyright: 'Copyright © 2022-現在 ApexSU 開発者。'
     },
 
     editLink: {
-      pattern: 'https://github.com/tiann/KernelSU/edit/main/website/docs/:path',
+      pattern: 'https://github.com/qrjhamron/ApexSU/edit/main/website/docs/:path',
       text: 'GitHub でこのページを編集'
     }
   }
@@ -35,7 +32,9 @@ export default defineConfig({
 
 function nav() {
   return [
-    { text: 'ガイド', link: '/ja_JP/guide/what-is-kernelsu' },
+    { text: 'ガイド', link: '/ja_JP/guide/what-is-apexsu' },
+    { text: 'ダウンロード', link: 'https://github.com/qrjhamron/ApexSU/releases' },
+    { text: '@smoothlady', link: 'https://t.me/smoothlady' }
   ]
 }
 
@@ -44,11 +43,10 @@ function sidebarGuide() {
     {
       text: 'ガイド',
       items: [
-        { text: 'KernelSU とは?', link: '/ja_JP/guide/what-is-kernelsu' },
+        { text: 'ApexSU とは?', link: '/ja_JP/guide/what-is-apexsu' },
         { text: 'インストール', link: '/ja_JP/guide/installation' },
         { text: 'ビルドするには?', link: '/ja_JP/guide/how-to-build' },
-        { text: '非 GKI デバイスでの実装', link: '/ja_JP/guide/how-to-integrate-for-non-gki' },
-        { text: '非公式の対応デバイス', link: '/ja_JP/guide/unofficially-support-devices.md' },
+        { text: 'GKI サポート方針', link: '/ja_JP/guide/how-to-integrate-for-non-gki' },
         { text: 'モジュールのガイド', link: '/ja_JP/guide/module.md' },
         { text: 'メタモジュール', link: '/ja_JP/guide/metamodule.md' },
         { text: 'モジュール設定', link: '/ja_JP/guide/module-config.md' },

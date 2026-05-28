@@ -1,47 +1,47 @@
 # 模組指南 {#module-guide}
 
-KernelSU 提供了一個模組機制，它可以在保持系統分割區完整性的同時達到修改系統分割區的效果；這種機制一般被稱為 systemless (無系統修改)。
+ApexSU 提供了一個模組機制，它可以在保持系統分割區完整性的同時達到修改系統分割區的效果；這種機制一般被稱為 systemless (無系統修改)。
 
-KernelSU 的模組運作機制與 Magisk 幾乎相同，如果您熟悉 Magisk 模組的開發，那麼開發 KernelSU 的模組大同小異，您可以跳過下列有關模組的介紹，只需要瞭解 [KernelSU 模組與 Magisk 模組的差異](difference-with-magisk.md)。
+ApexSU 的模組運作機制與 Magisk 幾乎相同，如果您熟悉 Magisk 模組的開發，那麼開發 ApexSU 的模組大同小異，您可以跳過下列有關模組的介紹，只需要瞭解 [ApexSU 模組與 Magisk 模組的差異](difference-with-magisk.md)。
 
 ::: warning METAMODULE 僅在修改系統檔案時需要
-KernelSU 使用 [metamodule](metamodule.md) 架構來掛載 `system` 目錄。**僅當您的模組需要修改 `/system` 檔案時**(透過 `system` 目錄)，您才需要安裝 metamodule(如 [meta-overlayfs](https://github.com/tiann/KernelSU/releases))。其他模組功能如腳本、sepolicy 規則和 system.prop 無需 metamodule 即可運作。
+ApexSU 使用 [metamodule](metamodule.md) 架構來掛載 `system` 目錄。**僅當您的模組需要修改 `/system` 檔案時**(透過 `system` 目錄)，您才需要安裝 metamodule(如 [meta-overlayfs](https://github.com/qrjhamron/ApexSU/releases))。其他模組功能如腳本、sepolicy 規則和 system.prop 無需 metamodule 即可運作。
 :::
 
 ## WebUI
 
-KernelSU 的模組支援顯示互動介面，請參閱 [WebUI 文檔](module-webui.md).
+ApexSU 的模組支援顯示互動介面，請參閱 [WebUI 文檔](module-webui.md).
 
 ## 模組配置
 
-KernelSU 提供了一個內建的配置系統，允許模組儲存持久化或暫時的鍵值設定。詳情請參閱[模組配置文檔](module-config.md)。
+ApexSU 提供了一個內建的配置系統，允許模組儲存持久化或暫時的鍵值設定。詳情請參閱[模組配置文檔](module-config.md)。
 
 ## Busybox
 
-KernelSU 提供了一個完備的 BusyBox 二進位檔案 (包括完整的 SELinux 支援)。可執行檔位於 `/data/adb/ksu/bin/busybox`。
-KernelSU 的 BusyBox 支援執行時可切換的 "ASH 獨立模式"。
+ApexSU 提供了一個完備的 BusyBox 二進位檔案 (包括完整的 SELinux 支援)。可執行檔位於 `/data/adb/ksu/bin/busybox`。
+ApexSU 的 BusyBox 支援執行時可切換的 "ASH 獨立模式"。
 ASH 獨立模式在執行 BusyBox 時，每個命令都會直接使用 BusyBox 中內建的應用程式，而不論 `PATH` 的設定為何。
 例如，`ls`、`rm`、`chmod` 等命令將不會使用 `PATH` 中設定的命令 (在 Android 的狀況下，預設狀況下分別為 `/system/bin/ls`、`/system/bin/rm` 和 `/system/bin/chmod`)，而是直接呼叫 BusyBox 內建的應用程式。
 這確保了腳本始終在可預測的環境中執行，並始終具有完整的命令套件，不論它執行在哪個 Android 版本上。
 要強制下一個命令不使用 BusyBox，您必須使用完整路徑呼叫可執行檔。
 
-每個基於 KernelSU 上下文的腳本都將在 BusyBox 的獨立模式執行。對於第三方開發人員而言，這包括所有開機腳本和模組安裝腳本。
+每個基於 ApexSU 上下文的腳本都將在 BusyBox 的獨立模式執行。對於第三方開發人員而言，這包括所有開機腳本和模組安裝腳本。
 
-對於想要在 KernelSU 之外使用這個「獨立模式」功能的使用者，有兩種啟用方法：
+對於想要在 ApexSU 之外使用這個「獨立模式」功能的使用者，有兩種啟用方法：
 
 1. 將環境變數 `ASH_STANDALONE` 設為 `1`。例如：`ASH_STANDALONE=1 /data/adb/ksu/bin/busybox sh <script>`
 2. 使用命令列選項切換：`/data/adb/ksu/bin/busybox sh -o standalone <script>`
 
-為了確保所有後續的 `sh` shell 都在獨立模式下執行，第一種是首選方法 (這也是 KernelSU 和 KernelSU 管理器內部使用的方法)，因為環境變數會被繼承到子執行緒中。
+為了確保所有後續的 `sh` shell 都在獨立模式下執行，第一種是首選方法 (這也是 ApexSU 和 ApexSU 管理器內部使用的方法)，因為環境變數會被繼承到子執行緒中。
 
 ::: tip 與 Magisk 的差異
-KernelSU 的 BusyBox 現在是直接使用 Magisk 專案編譯的二進位檔案，**感謝 Magisk！**
-因此，您完全不必擔心 BusyBox 腳本與在 Magisk 和 KernelSU 之間的相容性問題，因為它們完全相同！
+ApexSU 的 BusyBox 現在是直接使用 Magisk 專案編譯的二進位檔案，**感謝 Magisk！**
+因此，您完全不必擔心 BusyBox 腳本與在 Magisk 和 ApexSU 之間的相容性問題，因為它們完全相同！
 :::
 
-## KernelSU 模組 {#kernelsu-modules}
+## ApexSU 模組 {#apexsu-modules}
 
-KernelSU 模組是一個放置於 `/data/adb/modules` 且滿足下列結構的資料夾：
+ApexSU 模組是一個放置於 `/data/adb/modules` 且滿足下列結構的資料夾：
 
 ```txt
 /data/adb/modules
@@ -63,7 +63,7 @@ KernelSU 模組是一個放置於 `/data/adb/modules` 且滿足下列結構的�
 │   │
 │   │      *** 狀態旗標 ***
 │   │
-│   ├── skip_mount          <--- 如果這個檔案存在，那麼 KernelSU 將不會掛接您的系統資料夾
+│   ├── skip_mount          <--- 如果這個檔案存在，那麼 ApexSU 將不會掛接您的系統資料夾
 │   ├── disable             <--- 如果這個檔案存在，那麼模組將會被停用
 │   ├── remove              <--- 如果這個檔案存在，那麼模組將會在下次重新開機時被移除
 │   │
@@ -71,7 +71,7 @@ KernelSU 模組是一個放置於 `/data/adb/modules` 且滿足下列結構的�
 │   │
 │   ├── post-fs-data.sh     <--- 這個腳本將會在 post-fs-data 中執行
 │   ├── service.sh          <--- 這個腳本將會在 late_start 服務中執行
-|   ├── uninstall.sh        <--- 這個腳本將會在 KernelSU 移除模組時執行
+|   ├── uninstall.sh        <--- 這個腳本將會在 ApexSU 移除模組時執行
 │   ├── system.prop         <--- 這個檔案中指定的屬性將會在系統啟動時透過 resetprop 變更
 │   ├── sepolicy.rule       <--- 這個檔案中的 SELinux 原則將會在系統開機時載入
 │   │
@@ -94,12 +94,12 @@ KernelSU 模組是一個放置於 `/data/adb/modules` 且滿足下列結構的�
 ```
 
 ::: tip 與 Magisk 的差異
-KernelSU 沒有內建的針對 Zygisk 的支援，因此模組中沒有與 Zygisk 相關的內容，但您可以透過安裝 [ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext) 以支援 Zygisk 模組，此時 Zygisk 模組的內容與 Magisk 所支援的 Zygisk 完全相同。
+ApexSU 沒有內建的針對 Zygisk 的支援，因此模組中沒有與 Zygisk 相關的內容，但您可以透過安裝 [ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext) 以支援 Zygisk 模組，此時 Zygisk 模組的內容與 Magisk 所支援的 Zygisk 完全相同。
 :::
 
 ### module.prop
 
-module.prop 是一個模組的設定檔，在 KernelSU 中如果模組中不包含這個檔案，那麼它將不被認為是一個模組；這個檔案的格式如下：
+module.prop 是一個模組的設定檔，在 ApexSU 中如果模組中不包含這個檔案，那麼它將不被認為是一個模組；這個檔案的格式如下：
 
 ```txt
 id=<string>
@@ -135,7 +135,7 @@ webuiIcon=<path> (optional)
 在您的模組中的所有腳本中，請使用 `MODDIR=${0%/*}` 以取得您的模組基本目錄路徑；請不要在腳本中以硬式編碼的方式加入您的模組路徑。
 
 :::tip 與 Magisk 的差異
-您可以透過環境變數 `KSU` 來判斷腳本是執行在 KernelSU 還是 Magisk 中，如果執行在 KernelSU，這個值會被設為 `true`。
+您可以透過環境變數 `KSU` 來判斷腳本是執行在 ApexSU 還是 Magisk 中，如果執行在 ApexSU，這個值會被設為 `true`。
 :::
 
 ### `system` 目錄 {#system-directories}
@@ -147,7 +147,7 @@ webuiIcon=<path> (optional)
 
 如果您想要刪除系統先前的目錄中的某個檔案或資料夾，您需要在模組目錄中透過 `mknod filename c 0 0` 以建立一個 `filename` 的相同名稱的檔案；這樣 overlayfs 系統會自動「whiteout」等效刪除這個檔案 (`/system` 分割區並未被變更)。
 
-您也可以在 `customize.sh` 中宣告一個名為 `REMOVE` 並且包含一系列目錄的變數以執行移除作業，KernelSU 會自動為您在模組對應目錄執行 `mknod <TARGET> c 0 0`。例如：
+您也可以在 `customize.sh` 中宣告一個名為 `REMOVE` 並且包含一系列目錄的變數以執行移除作業，ApexSU 會自動為您在模組對應目錄執行 `mknod <TARGET> c 0 0`。例如：
 
 ```sh
 REMOVE="
@@ -160,7 +160,7 @@ REMOVE="
 
 如果您想要取代系統的某個目錄，您需要在模組目錄中建立一個相同路徑的目錄，然後為此目錄設定此屬性：`setfattr -n trusted.overlay.opaque -v y <TARGET>`；這樣 overlayfs 系統會自動將對應目錄取代 (`/system` 分割區並未被變更)。
 
-您可以在 `customize.sh` 中宣告一個名為 `REMOVE` 並且包含一系列目錄的變數以執行移除作業，KernelSU 會自動為您在模組對應目錄執行相關作業。例如：
+您可以在 `customize.sh` 中宣告一個名為 `REMOVE` 並且包含一系列目錄的變數以執行移除作業，ApexSU 會自動為您在模組對應目錄執行相關作業。例如：
 
 ```sh
 REPLACE="
@@ -173,7 +173,7 @@ REPLACE="
 
 ::: tip 與 Magisk 的差異
 
-KernelSU 的 systemless 機制透過核心的 overlayfs 實作，而 Magisk 目前則是透過 magic mount (bind mount)，兩者的實作方式有很大的差別，但最終的目標是一致的：不修改實際的 `/system` 分區但修改 `/system` 檔案。
+ApexSU 的 systemless 機制透過核心的 overlayfs 實作，而 Magisk 目前則是透過 magic mount (bind mount)，兩者的實作方式有很大的差別，但最終的目標是一致的：不修改實際的 `/system` 分區但修改 `/system` 檔案。
 :::
 
 如果您對 overlayfs 感興趣，建議閱讀 Linux Kernel 關於 [overlayfs 的文檔](https://docs.kernel.org/filesystems/overlayfs.html)
@@ -188,7 +188,7 @@ KernelSU 的 systemless 機制透過核心的 overlayfs 實作，而 Magisk 目�
 
 ## 模組安裝程式 {#module-installer}
 
-KernelSU 的模組安裝程式就是一個可以透過 KernelSU 管理員應用程式刷新的 Zip 檔案，這個 Zip 檔案的格式如下：
+ApexSU 的模組安裝程式就是一個可以透過 ApexSU 管理員應用程式刷新的 Zip 檔案，這個 Zip 檔案的格式如下：
 
 ```txt
 module.zip
@@ -201,7 +201,7 @@ module.zip
 ```
 
 :::warning 警告
-KernelSU 模組不支援在 Recovery 中安裝！！
+ApexSU 模組不支援在 Recovery 中安裝！！
 :::
 
 ### 自訂安裝過程 {#customizing-installation}
@@ -210,15 +210,15 @@ KernelSU 模組不支援在 Recovery 中安裝！！
 
 如果您想完全控制腳本的安裝過程，您可以在 `customize.sh` 中宣告 `SKIPUNZIP=1` 以跳過所有的預設安裝步驟。此時，您需要自行處理所有的安裝過程(例如解壓縮模組、設定權限等)。
 
-`customize.sh` 腳本以「獨立模式」執行在 KernelSU 的 BusyBox `ash` shell 中。您可以使用下列變數和函式：
+`customize.sh` 腳本以「獨立模式」執行在 ApexSU 的 BusyBox `ash` shell 中。您可以使用下列變數和函式：
 
 #### 變數 {#variables}
 
-- `KSU` (bool): 標示此腳本執行於 KernelSU 環境中，此變數的值將永遠為 `true`，您可以透過它與 Magisk 進行區分。
-- `KSU_VER` (string): KernelSU 目前的版本名稱 (例如 `v0.4.0`)
-- `KSU_VER_CODE` (int): KernelSU 使用者空間目前的版本代碼 (例如 `10672`)
-- `KSU_KERNEL_VER_CODE` (int): KernelSU 核心空間目前的版本代碼 (例如 `10672`)
-- `BOOTMODE` (bool): 此變數在 KernelSU 中永遠為 `true`
+- `KSU` (bool): 標示此腳本執行於 ApexSU 環境中，此變數的值將永遠為 `true`，您可以透過它與 Magisk 進行區分。
+- `KSU_VER` (string): ApexSU 目前的版本名稱 (例如 `v0.4.0`)
+- `KSU_VER_CODE` (int): ApexSU 使用者空間目前的版本代碼 (例如 `10672`)
+- `KSU_KERNEL_VER_CODE` (int): ApexSU 核心空間目前的版本代碼 (例如 `10672`)
+- `BOOTMODE` (bool): 此變數在 ApexSU 中永遠為 `true`
 - `MODPATH` (path): 目前模組的安裝目錄
 - `TMPDIR` (path): 可以存放暫存檔的位置
 - `ZIPFILE` (path): 目前模組的安裝程式 Zip
@@ -227,7 +227,7 @@ KernelSU 模組不支援在 Recovery 中安裝！！
 - `API` (int): 目前裝置的 Android API 版本 (例如 Android 6.0 上為 `23`)
 
 ::: warning 警告
-`MAGISK_VER_CODE` 在 KernelSU 永遠為 `25200`，`MAGISK_VER` 則為 `v25.2`，請不要透過這兩個變數來判斷是否為 KernelSU！
+`MAGISK_VER_CODE` 在 ApexSU 永遠為 `25200`，`MAGISK_VER` 則為 `v25.2`，請不要透過這兩個變數來判斷是否為 ApexSU！
 :::
 
 #### 函式 {#functions}
@@ -258,7 +258,7 @@ set_perm_recursive <directory> <owner> <group> <dirpermission> <filepermission> 
 
 ## 開機腳本 {#boot-scripts}
 
-在 KernelSU 中，依據腳本執行模式的不同分為兩種：post-fs-data 模式和 late_start 服務模式。
+在 ApexSU 中，依據腳本執行模式的不同分為兩種：post-fs-data 模式和 late_start 服務模式。
 
 - post-fs-data 模式
   - 這個階段是 **阻塞** 的。在執行完成之前或 10 秒鐘之後，開機程序會被暫停。
@@ -271,7 +271,7 @@ set_perm_recursive <directory> <owner> <group> <dirpermission> <filepermission> 
   - 這個階段是 **非阻塞** 的。您的腳本會與其餘的啟動程序**平行**執行。
   - **大多數腳本建議在這種模式下執行**。
 
-在 KernelSU 中，開機腳本依據存放位置的不同還分為兩種：一般腳本和模組腳本。
+在 ApexSU 中，開機腳本依據存放位置的不同還分為兩種：一般腳本和模組腳本。
 
 - 一般腳本
   - 放置於 `/data/adb/post-fs-data.d` 或 `/data/adb/service.d` 中。
@@ -284,22 +284,22 @@ set_perm_recursive <directory> <owner> <group> <dirpermission> <filepermission> 
   - 僅有在模組啟用時才會執行。
   - `post-fs-data.sh` 以 post-fs-data 模式運行，`post-mount.sh` 在 overlayfs 掛載後運行，而 `service.sh` 則以 late_start 服務模式運行，`boot-completed` 在 Android 系統啟動完畢後以服務模式運作。
 
-所有啟動腳本都將在 KernelSU 的 BusyBox ash shell 中執行，並啟用**獨立模式**。
+所有啟動腳本都將在 ApexSU 的 BusyBox ash shell 中執行，並啟用**獨立模式**。
 
 ### 開機腳本解釋 {#boot-scripts-process-explanation}
 
-以下是Android的相關啟動流程（部分省略），其中包括KernelSU的運行（帶前導星號），可以幫助您更好地理解這些模組腳本的用途：
+以下是Android的相關啟動流程（部分省略），其中包括ApexSU的運行（帶前導星號），可以幫助您更好地理解這些模組腳本的用途：
 ```txt
 0. Bootloader (nothing on screen)
 load patched boot.img
 load kernel:
-    - GKI mode: GKI kernel with KernelSU integrated
+    - GKI mode: GKI kernel with ApexSU integrated
     - LKM mode: stock kernel
 ...
 
 1. kernel exec init (oem logo on screen):
     - GKI mode: stock init
-    - LKM mode: exec ksuinit, insmod kernelsu.ko, exec stock init
+    - LKM mode: exec ksuinit, insmod apexsu.ko, exec stock init
 mount /dev, /dev/pts, /proc, /sys, etc.
 property-init -> read default props
 read init.rc

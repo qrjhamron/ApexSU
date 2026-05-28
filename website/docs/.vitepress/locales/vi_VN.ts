@@ -1,14 +1,11 @@
-import { createRequire } from 'module'
 import { defineConfig } from 'vitepress'
-
-const require = createRequire(import.meta.url)
-const pkg = require('vitepress/package.json')
 
 export default defineConfig({
   lang: 'vi-VN',
   description: 'Một giải pháp root trực tiếp trên kernel dành cho các thiết bị hỗ trợ GKI.',
 
   themeConfig: {
+    logo: '/logo.svg',
     nav: nav(),
 
     lastUpdatedText: 'cập nhật lần cuối',
@@ -18,16 +15,16 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/tiann/KernelSU' }
+      { icon: 'github', link: 'https://github.com/qrjhamron/ApexSU' }
     ],
 
     footer: {
-        message: 'Phát hành dưới giấy phép GPL3.',
-        copyright: 'Bản Quyền © 2022-nay KernelSU developers.'
+        message: 'Telegram: @smoothlady',
+        copyright: 'Bản Quyền © 2022-nay ApexSU developers.'
     },
 
     editLink: {
-        pattern: 'https://github.com/tiann/KernelSU/edit/main/website/docs/:path',
+        pattern: 'https://github.com/qrjhamron/ApexSU/edit/main/website/docs/:path',
         text: 'Chỉnh sửa trang này trên GitHub'
     }
   }
@@ -35,7 +32,9 @@ export default defineConfig({
 
 function nav() {
   return [
-    { text: 'Hướng Dẫn', link: '/vi_VN/guide/what-is-kernelsu' },
+    { text: 'Hướng Dẫn', link: '/vi_VN/guide/what-is-apexsu' },
+    { text: 'Tải xuống', link: 'https://github.com/qrjhamron/ApexSU/releases' },
+    { text: '@smoothlady', link: 'https://t.me/smoothlady' }
   ]
 }
 
@@ -44,11 +43,10 @@ function sidebarGuide() {
     {
         text: 'Hướng Dẫn',
         items: [
-          { text: 'KernelSU là gì?', link: '/vi_VN/guide/what-is-kernelsu' },
+          { text: 'ApexSU là gì?', link: '/vi_VN/guide/what-is-apexsu' },
           { text: 'Cách cài đặt', link: '/vi_VN/guide/installation' },
           { text: 'Cách để build?', link: '/vi_VN/guide/how-to-build' },
-          { text: 'Tích hợp vào thiết bị không sử dụng GKI', link: '/vi_VN/guide/how-to-integrate-for-non-gki'},
-          { text: 'Thiết bị hỗ trợ không chính thức', link: '/vi_VN/guide/unofficially-support-devices.md' },
+          { text: 'Chính sách hỗ trợ GKI', link: '/vi_VN/guide/how-to-integrate-for-non-gki'},
           { text: 'Metamodule', link: '/vi_VN/guide/metamodule.md' },
           { text: 'Cấu hình module', link: '/vi_VN/guide/module-config.md' },
           { text: 'FAQ - Câu hỏi thường gặp', link: '/vi_VN/guide/faq' },

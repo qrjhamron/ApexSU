@@ -1,6 +1,6 @@
 # App Profile
 
-App Profile 是 KernelSU 提供的一种针对各种应用自定义其使用配置的机制。
+App Profile 是 ApexSU 提供的一种针对各种应用自定义其使用配置的机制。
 
 对授予了 root 权限（也即可以使用 `su`）的应用来说，App Profile 也可以称之为 Root Profile，它可以自定义 `su` 的 `uid`, `gid`, `groups`, `capabilities` 以及 `SELinux` 规则，从而限制 root 用户的权限；比如可以针对防火墙应用仅授予网络权限，而不授予文件访问权限，针对冻结类应用仅授予 shell 权限而不是直接给 root；通过最小化权限原则**把权力关进笼子里**。
 
@@ -31,7 +31,7 @@ uid=2000(shell) gid=2000(shell) groups=2000(shell),1004(input),1007(log),1011(ad
 
 其中，UID 为 `2000`，GID 也即主要组 ID 也为 `2000`；除此之外它还在很多补充组里面，例如 `inet` 组代表可以创建 `AF_INET` 和 `AF_INET6` 的 socket（访问网络），`sdcard_rw` 代表可以读写 sdcard 等。
 
-KernelSU 的 Root Profile 可以自定义执行 `su` 后 root 进程的 UID, GID 和 groups。例如，你可以设置某个 root 应用的 Root Profile 其 UID 为 `2000`，这意味着此应用在使用 `su` 的时候，它的实际权限是 ADB Shell 级别；你可以去掉 groups 中的 `inet`，这样这个 `su` 就无法访问网络。
+ApexSU 的 Root Profile 可以自定义执行 `su` 后 root 进程的 UID, GID 和 groups。例如，你可以设置某个 root 应用的 Root Profile 其 UID 为 `2000`，这意味着此应用在使用 `su` 的时候，它的实际权限是 ADB Shell 级别；你可以去掉 groups 中的 `inet`，这样这个 `su` 就无法访问网络。
 
 :::tip 注意
 App Profile 仅仅是控制 root 应用使用 `su` 后的权限，它并非控制 App 本身的权限！如果 App 本身申请了网络访问权限，那么它即使不使用 `su` 也可以访问网络；为 `su` 去掉 `inet` 组仅仅是让 `su` 无法访问网络。
@@ -49,7 +49,7 @@ Capabilities 是 Linux 的一种分权机制。
 
 每一个 Capability 代表一个或者一类权限。比如 `CAP_DAC_READ_SEARCH` 就代表是否有能力绕过文件读取权限检查和目录读取和执行权限检查。如果一个有效 UID 为 `0` 的用户（root 用户）没有 `CAP_DAC_READ_SEARCH` 或者更高 Capalities，这意味着即使它是 root 也不能随意读取文件。
 
-KernelSU 的 Root Profile 可以自定义执行 `su` 后 root 进程的 Capabilities，从而实现只授予“部分 root 权限”。与上面介绍的 UID, GID 不同，某些 root 应用就是需要 `su` 后 UID 是 `0`，此时我们可以通过限制这个 UID 为 `0` 的 root 用户的 Capabilities，就可以限制它能够执行的操作。
+ApexSU 的 Root Profile 可以自定义执行 `su` 后 root 进程的 Capabilities，从而实现只授予“部分 root 权限”。与上面介绍的 UID, GID 不同，某些 root 应用就是需要 `su` 后 UID 是 `0`，此时我们可以通过限制这个 UID 为 `0` 的 root 用户的 Capabilities，就可以限制它能够执行的操作。
 
 :::tip 强烈建议
 Linux 系统关于 Capability 的 [官方文档](https://man7.org/linux/man-pages/man7/capabilities.7.html)，解释了每一项 Capability 所代表的能力，写的非常详细，如果你想要自定义 Capabilities，请务必先阅读此文档。
@@ -74,7 +74,7 @@ SELinux 的完整概念比较复杂，我们这里不打算讲解它的具体工
 2. [Redhat: what-is-selinux](https://www.redhat.com/en/topics/linux/what-is-selinux)
 3. [ArchLinux: SELinux](https://wiki.archlinux.org/title/SELinux)
 
-KernelSU 的 Root Profile 可以自定义执行 `su` 后 root 进程的 SELinux context，并且可以针对这个 context 设置特定的访问控制规则，从而更加精细化地控制 root 权限。
+ApexSU 的 Root Profile 可以自定义执行 `su` 后 root 进程的 SELinux context，并且可以针对这个 context 设置特定的访问控制规则，从而更加精细化地控制 root 权限。
 
 通常情况下，应用执行 `su` 后，会将进程切换到一个 **不受任何限制** 的 SELinux 域，比如 `u:r:su:s0`，通过 Root Profile，我们可以将它切换到一个自定义的域，比如 `u:r:app1:s0`，然后为这个域制定一系列规则：
 
@@ -106,13 +106,13 @@ allow app1 * * *
 
 ### 卸载模块
 
-KernelSU 提供了一种 systemless 的方式来修改系统分区，这是通过挂载 overlayfs 来实现的。但有些情况下，App 可能会对这种行为比较敏感；因此，我们可以通过设置“卸载模块”来卸载挂载在这些 App 上的模块。
+ApexSU 提供了一种 systemless 的方式来修改系统分区，这是通过挂载 overlayfs 来实现的。但有些情况下，App 可能会对这种行为比较敏感；因此，我们可以通过设置“卸载模块”来卸载挂载在这些 App 上的模块。
 
-另外，KernelSU 管理器的设置界面还提供了一个“默认卸载模块”的开关，这个开关默认情况下是**开启**的，这意味着**如果不对 App 做额外的设置**，默认情况下 KernelSU 或者某些模块会对此 App 执行卸载操作。当然，如果你不喜欢这个设置或者这个设置会影响某些 App，可以有如下选择：
+另外，ApexSU 管理器的设置界面还提供了一个“默认卸载模块”的开关，这个开关默认情况下是**开启**的，这意味着**如果不对 App 做额外的设置**，默认情况下 ApexSU 或者某些模块会对此 App 执行卸载操作。当然，如果你不喜欢这个设置或者这个设置会影响某些 App，可以有如下选择：
 
 1. 保持“默认卸载模块”的开关，然后针对不需要“卸载模块”的 App 进行单独的设置，在 App Profile 中关闭“卸载模块”；（相当于“白名单”）。
 2. 关闭“默认卸载模块”的开关，然后针对需要“卸载模块”的 App 进行单独的设置，在 App Profile 中开启“卸载模块”；（相当于“黑名单”）。
 
 :::info
-KernelSU 在 5.10 及以上内核上，内核会执行“卸载模块”的操作；但在 5.10 以下的设备上，这个开关仅仅是一个“配置项”，KernelSU 本身不会做任何动作，一些模块（如 Zygisksu 会通过这个模块决定是否需要卸载）
+ApexSU 在 5.10 及以上内核上，内核会执行“卸载模块”的操作；但在 5.10 以下的设备上，这个开关仅仅是一个“配置项”，ApexSU 本身不会做任何动作，一些模块（如 Zygisksu 会通过这个模块决定是否需要卸载）
 :::

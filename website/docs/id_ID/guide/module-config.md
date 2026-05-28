@@ -1,6 +1,6 @@
 # Konfigurasi Modul
 
-KernelSU menyediakan sistem konfigurasi bawaan yang memungkinkan modul menyimpan pengaturan key-value persisten atau sementara. Konfigurasi disimpan dalam format biner di `/data/adb/ksu/module_configs/<module_id>/` dengan karakteristik berikut:
+ApexSU menyediakan sistem konfigurasi bawaan yang memungkinkan modul menyimpan pengaturan key-value persisten atau sementara. Konfigurasi disimpan dalam format biner di `/data/adb/ksu/module_configs/<module_id>/` dengan karakteristik berikut:
 
 ## Tipe Konfigurasi
 
@@ -108,7 +108,7 @@ Saat mengambil daftar modul, jika konfigurasi `override.description` ada, itu ak
 
 ### Mendeklarasikan Fitur yang Dikelola
 
-Modul dapat mendeklarasikan fitur KernelSU mana yang mereka kelola menggunakan pola konfigurasi `manage.<feature>`. Fitur yang didukung sesuai dengan enum internal `FeatureId` KernelSU:
+Modul dapat mendeklarasikan fitur ApexSU mana yang mereka kelola menggunakan pola konfigurasi `manage.<feature>`. Fitur yang didukung sesuai dengan enum internal `FeatureId` ApexSU:
 
 **Fitur yang Didukung:**
 - `su_compat` - Mode kompatibilitas SU
@@ -131,10 +131,10 @@ ksud module config delete manage.su_compat
 - Untuk berhenti mengelola fitur, hapus kunci konfigurasi sepenuhnya
 
 Fitur yang dikelola diekspos melalui API daftar modul sebagai field `managedFeatures` (string yang dipisahkan koma). Ini memungkinkan:
-- Pengelola KernelSU mendeteksi modul mana yang mengelola fitur KernelSU mana
+- Pengelola ApexSU mendeteksi modul mana yang mengelola fitur ApexSU mana
 - Pencegahan konflik ketika beberapa modul mencoba mengelola fitur yang sama
-- Koordinasi yang lebih baik antara modul dan fungsionalitas inti KernelSU
+- Koordinasi yang lebih baik antara modul dan fungsionalitas inti ApexSU
 
 ::: warning HANYA FITUR YANG DIDUKUNG
-Gunakan hanya nama fitur yang telah ditentukan sebelumnya yang tercantum di atas (`su_compat`, `kernel_umount`). Ini sesuai dengan fitur internal KernelSU yang sebenarnya. Menggunakan nama fitur lain tidak akan menyebabkan error, tetapi tidak memiliki tujuan fungsional.
+Gunakan hanya nama fitur yang telah ditentukan sebelumnya yang tercantum di atas (`su_compat`, `kernel_umount`). Ini sesuai dengan fitur internal ApexSU yang sebenarnya. Menggunakan nama fitur lain tidak akan menyebabkan error, tetapi tidak memiliki tujuan fungsional.
 :::

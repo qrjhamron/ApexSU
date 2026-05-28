@@ -1,6 +1,6 @@
 # 模組配置
 
-KernelSU 提供了一個內建的配置系統,允許模組儲存持久化或暫時的鍵值設定。配置以二進位格式儲存在 `/data/adb/ksu/module_configs/<module_id>/`,具有以下特性:
+ApexSU 提供了一個內建的配置系統,允許模組儲存持久化或暫時的鍵值設定。配置以二進位格式儲存在 `/data/adb/ksu/module_configs/<module_id>/`,具有以下特性:
 
 ## 配置類型
 
@@ -108,7 +108,7 @@ ksud module config set override.description "在管理器中顯示的自訂描�
 
 ### 宣告管理的功能
 
-模組可以使用 `manage.<feature>` 配置模式宣告它們管理的 KernelSU 功能。支援的功能對應於 KernelSU 內部的 `FeatureId` 列舉:
+模組可以使用 `manage.<feature>` 配置模式宣告它們管理的 ApexSU 功能。支援的功能對應於 ApexSU 內部的 `FeatureId` 列舉:
 
 **支援的功能:**
 - `su_compat` - SU 相容模式
@@ -131,10 +131,10 @@ ksud module config delete manage.su_compat
 - 要停止管理某個功能,請完全刪除該配置鍵
 
 管理的功能透過模組列表 API 以 `managedFeatures` 欄位(逗號分隔的字串)公開。這允許:
-- KernelSU 管理器偵測哪些模組管理哪些 KernelSU 功能
+- ApexSU 管理器偵測哪些模組管理哪些 ApexSU 功能
 - 防止多個模組嘗試管理同一功能時發生衝突
-- 更好地協調模組與核心 KernelSU 功能之間的關係
+- 更好地協調模組與核心 ApexSU 功能之間的關係
 
 ::: warning 僅支援預定義功能
-僅使用上面列出的預定義功能名稱(`su_compat`、`kernel_umount`)。這些對應於實際的 KernelSU 內部功能。使用其他功能名稱不會導致錯誤,但沒有任何功能作用。
+僅使用上面列出的預定義功能名稱(`su_compat`、`kernel_umount`)。這些對應於實際的 ApexSU 內部功能。使用其他功能名稱不會導致錯誤,但沒有任何功能作用。
 :::

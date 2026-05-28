@@ -1,12 +1,12 @@
 # Metamodule
 
-Metamodules are a revolutionary feature in KernelSU that transfers critical module system capabilities from the core to pluggable modules. This architectural shift maintains KernelSU's stability and security while unleashing greater innovation potential for the module ecosystem.
+Metamodules are a revolutionary feature in ApexSU that transfers critical module system capabilities from the core to pluggable modules. This architectural shift maintains ApexSU's stability and security while unleashing greater innovation potential for the module ecosystem.
 
 ## What is a Metamodule?
 
-A metamodule is a special type of KernelSU module that provides core infrastructure functionality for the module system. Unlike regular modules that modify system files, metamodules control *how* regular modules are installed and mounted.
+A metamodule is a special type of ApexSU module that provides core infrastructure functionality for the module system. Unlike regular modules that modify system files, metamodules control *how* regular modules are installed and mounted.
 
-Metamodules are a plugin-based extension mechanism that allows complete customization of KernelSU's module management infrastructure. By delegating mounting and installation logic to metamodules, KernelSU avoids being a fragile detection point while enabling diverse implementation strategies.
+Metamodules are a plugin-based extension mechanism that allows complete customization of ApexSU's module management infrastructure. By delegating mounting and installation logic to metamodules, ApexSU avoids being a fragile detection point while enabling diverse implementation strategies.
 
 **Key characteristics:**
 
@@ -17,13 +17,13 @@ Metamodules are a plugin-based extension mechanism that allows complete customiz
 
 ## Why Metamodules?
 
-Traditional root solutions bake mounting logic into their core, making them easier to detect and harder to evolve. KernelSU's metamodule architecture solves these problems through separation of concerns.
+Traditional root solutions bake mounting logic into their core, making them easier to detect and harder to evolve. ApexSU's metamodule architecture solves these problems through separation of concerns.
 
 **Strategic advantages:**
 
-- **Reduced detection surface**: KernelSU itself doesn't perform mounts, reducing detection vectors
+- **Reduced detection surface**: ApexSU itself doesn't perform mounts, reducing detection vectors
 - **Stability**: Core remains stable while mounting implementations can evolve
-- **Innovation**: Community can develop alternative mounting strategies without forking KernelSU
+- **Innovation**: Community can develop alternative mounting strategies without forking ApexSU
 - **Choice**: Users can select the implementation that best fits their needs
 
 **Mounting flexibility:**
@@ -35,12 +35,12 @@ Traditional root solutions bake mounting logic into their core, making them easi
 
 **Beyond mounting:**
 
-- **Extensibility**: Add features like kernel module support without modifying core KernelSU
-- **Modularity**: Update implementations independently of KernelSU releases
+- **Extensibility**: Add features like kernel module support without modifying core ApexSU
+- **Modularity**: Update implementations independently of ApexSU releases
 - **Customization**: Create specialized solutions for specific devices or use cases
 
 ::: warning IMPORTANT
-Without a metamodule installed, modules will **NOT** be mounted. Fresh KernelSU installations require installing a metamodule (such as `meta-overlayfs`) for modules to function.
+Without a metamodule installed, modules will **NOT** be mounted. Fresh ApexSU installations require installing a metamodule (such as `meta-overlayfs`) for modules to function.
 :::
 
 ## For Users
@@ -50,7 +50,7 @@ Without a metamodule installed, modules will **NOT** be mounted. Fresh KernelSU 
 Install a metamodule the same way as regular modules:
 
 1. Download the metamodule ZIP file (e.g., `meta-overlayfs.zip`)
-2. Open KernelSU Manager app
+2. Open ApexSU Manager app
 3. Tap the floating action button (➕)
 4. Select the metamodule ZIP file
 5. Reboot your device
@@ -59,7 +59,7 @@ The `meta-overlayfs` metamodule is the official reference implementation that pr
 
 ### Checking Active Metamodule
 
-You can check which metamodule is currently active in the KernelSU Manager app's Module page. The active metamodule will be displayed in your module list with its special designation.
+You can check which metamodule is currently active in the ApexSU Manager app's Module page. The active metamodule will be displayed in your module list with its special designation.
 
 ### Uninstalling a Metamodule
 
@@ -69,7 +69,7 @@ Uninstalling a metamodule will affect **ALL** modules. After removal, modules wi
 
 To uninstall:
 
-1. Open KernelSU Manager
+1. Open ApexSU Manager
 2. Find the metamodule in your module list
 3. Tap uninstall (you'll see a special warning)
 4. Confirm the action
@@ -79,7 +79,7 @@ After uninstalling, you should install another metamodule if you want modules to
 
 ### Single Metamodule Constraint
 
-Only one metamodule can be installed at a time. If you try to install a second metamodule, KernelSU will prevent the installation to avoid conflicts.
+Only one metamodule can be installed at a time. If you try to install a second metamodule, ApexSU will prevent the installation to avoid conflicts.
 
 To switch metamodules:
 
@@ -92,7 +92,7 @@ To switch metamodules:
 
 ## For Module Developers
 
-If you're developing regular KernelSU modules, you don't need to worry much about metamodules. Your modules will work as long as users have a compatible metamodule installed (like `meta-overlayfs`).
+If you're developing regular ApexSU modules, you don't need to worry much about metamodules. Your modules will work as long as users have a compatible metamodule installed (like `meta-overlayfs`).
 
 **What you need to know:**
 
@@ -100,12 +100,12 @@ If you're developing regular KernelSU modules, you don't need to worry much abou
 - **No code changes needed**: Existing modules continue to work without modification
 
 ::: tip
-If you're familiar with Magisk module development, your modules will work the same way in KernelSU when metamodule is installed, as it provides Magisk-compatible mounting.
+If you're familiar with Magisk module development, your modules will work the same way in ApexSU when metamodule is installed, as it provides Magisk-compatible mounting.
 :::
 
 ## For Metamodule Developers
 
-Creating a metamodule allows you to customize how KernelSU handles module installation, mounting, and uninstallation.
+Creating a metamodule allows you to customize how ApexSU handles module installation, mounting, and uninstallation.
 
 ### Basic Requirements
 
@@ -163,7 +163,7 @@ Metamodules can provide up to three special hook scripts:
 **Environment variables:**
 
 - `MODDIR`: The metamodule's directory path (e.g., `/data/adb/modules/meta-example`)
-- All standard KernelSU environment variables
+- All standard ApexSU environment variables
 
 **Responsibilities:**
 
@@ -172,7 +172,7 @@ Metamodules can provide up to three special hook scripts:
 - Handle module-specific mounting requirements
 
 ::: danger CRITICAL REQUIREMENT
-When performing mount operations, you **MUST** set the source/device name to `"KSU"`. This identifies mounts as belonging to KernelSU.
+When performing mount operations, you **MUST** set the source/device name to `"KSU"`. This identifies mounts as belonging to ApexSU.
 
 **Example (correct):**
 
@@ -186,7 +186,7 @@ mount -t overlay -o lowerdir=/lower,upperdir=/upper,workdir=/work KSU /target
 fsconfig_set_string(fs, "source", "KSU")?;
 ```
 
-This is essential for KernelSU to identify and manage its mounts properly.
+This is essential for ApexSU to identify and manage its mounts properly.
 :::
 
 **Example script:**
@@ -305,7 +305,7 @@ boot-completed stage:
 
 ### Symlink Mechanism
 
-When a metamodule is installed, KernelSU creates a symlink:
+When a metamodule is installed, ApexSU creates a symlink:
 
 ```sh
 /data/adb/metamodule -> /data/adb/modules/<metamodule_id>
@@ -395,7 +395,7 @@ When developing metamodules:
 
 Before releasing:
 
-1. **Test installation** on a clean KernelSU setup
+1. **Test installation** on a clean ApexSU setup
 2. **Verify mounting** with various module types
 3. **Check compatibility** with common modules
 4. **Test uninstallation** and cleanup
@@ -427,5 +427,5 @@ No. It provides standard overlayfs mounting compatible with most modules. You ca
 ## See Also
 
 - [Module Guide](module.md) - General module development
-- [Difference with Magisk](difference-with-magisk.md) - Comparing KernelSU and Magisk
-- [How to Build](how-to-build.md) - Building KernelSU from source
+- [Difference with Magisk](difference-with-magisk.md) - Comparing ApexSU and Magisk
+- [How to Build](how-to-build.md) - Building ApexSU from source

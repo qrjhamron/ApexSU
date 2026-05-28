@@ -1,12 +1,12 @@
 # Metamodule
 
-Metamodule là một tính năng đột phá trong KernelSU cho phép chuyển các khả năng quan trọng của hệ thống module từ lõi sang các module có thể cắm thêm. Sự thay đổi kiến trúc này duy trì tính ổn định và bảo mật của KernelSU đồng thời giải phóng tiềm năng đổi mới lớn hơn cho hệ sinh thái module.
+Metamodule là một tính năng đột phá trong ApexSU cho phép chuyển các khả năng quan trọng của hệ thống module từ lõi sang các module có thể cắm thêm. Sự thay đổi kiến trúc này duy trì tính ổn định và bảo mật của ApexSU đồng thời giải phóng tiềm năng đổi mới lớn hơn cho hệ sinh thái module.
 
 ## Metamodule là gì?
 
-Metamodule là một loại module đặc biệt của KernelSU cung cấp chức năng cơ sở hạ tầng cốt lõi cho hệ thống module. Không giống như các module thông thường sửa đổi tệp hệ thống, metamodule kiểm soát *cách thức* các module thông thường được cài đặt và mount.
+Metamodule là một loại module đặc biệt của ApexSU cung cấp chức năng cơ sở hạ tầng cốt lõi cho hệ thống module. Không giống như các module thông thường sửa đổi tệp hệ thống, metamodule kiểm soát *cách thức* các module thông thường được cài đặt và mount.
 
-Metamodule là cơ chế mở rộng dựa trên plugin cho phép tùy chỉnh hoàn toàn cơ sở hạ tầng quản lý module của KernelSU. Bằng cách ủy thác logic mount và cài đặt cho metamodule, KernelSU tránh trở thành điểm phát hiện dễ vỡ trong khi cho phép các chiến lược triển khai đa dạng.
+Metamodule là cơ chế mở rộng dựa trên plugin cho phép tùy chỉnh hoàn toàn cơ sở hạ tầng quản lý module của ApexSU. Bằng cách ủy thác logic mount và cài đặt cho metamodule, ApexSU tránh trở thành điểm phát hiện dễ vỡ trong khi cho phép các chiến lược triển khai đa dạng.
 
 **Đặc điểm chính:**
 
@@ -17,13 +17,13 @@ Metamodule là cơ chế mở rộng dựa trên plugin cho phép tùy chỉnh h
 
 ## Tại sao cần Metamodule?
 
-Các giải pháp root truyền thống tích hợp logic mount vào lõi của chúng, khiến chúng dễ bị phát hiện và khó phát triển hơn. Kiến trúc metamodule của KernelSU giải quyết những vấn đề này thông qua việc tách biệt các mối quan tâm.
+Các giải pháp root truyền thống tích hợp logic mount vào lõi của chúng, khiến chúng dễ bị phát hiện và khó phát triển hơn. Kiến trúc metamodule của ApexSU giải quyết những vấn đề này thông qua việc tách biệt các mối quan tâm.
 
 **Lợi thế chiến lược:**
 
-- **Giảm bề mặt phát hiện**: Bản thân KernelSU không thực hiện mount, giảm các vector phát hiện
+- **Giảm bề mặt phát hiện**: Bản thân ApexSU không thực hiện mount, giảm các vector phát hiện
 - **Tính ổn định**: Lõi vẫn ổn định trong khi các triển khai mount có thể phát triển
-- **Đổi mới**: Cộng đồng có thể phát triển các chiến lược mount thay thế mà không cần fork KernelSU
+- **Đổi mới**: Cộng đồng có thể phát triển các chiến lược mount thay thế mà không cần fork ApexSU
 - **Lựa chọn**: Người dùng có thể chọn triển khai phù hợp nhất với nhu cầu của họ
 
 **Tính linh hoạt của mount:**
@@ -35,12 +35,12 @@ Các giải pháp root truyền thống tích hợp logic mount vào lõi của 
 
 **Vượt xa mount:**
 
-- **Khả năng mở rộng**: Thêm các tính năng như hỗ trợ kernel module mà không cần sửa đổi lõi KernelSU
-- **Tính module hóa**: Cập nhật các triển khai độc lập với các bản phát hành KernelSU
+- **Khả năng mở rộng**: Thêm các tính năng như hỗ trợ kernel module mà không cần sửa đổi lõi ApexSU
+- **Tính module hóa**: Cập nhật các triển khai độc lập với các bản phát hành ApexSU
 - **Tùy chỉnh**: Tạo các giải pháp chuyên biệt cho các thiết bị hoặc trường hợp sử dụng cụ thể
 
 ::: warning QUAN TRỌNG
-Nếu không cài đặt metamodule, các module sẽ **KHÔNG** được mount. Các cài đặt KernelSU mới yêu cầu cài đặt một metamodule (như `meta-overlayfs`) để các module hoạt động.
+Nếu không cài đặt metamodule, các module sẽ **KHÔNG** được mount. Các cài đặt ApexSU mới yêu cầu cài đặt một metamodule (như `meta-overlayfs`) để các module hoạt động.
 :::
 
 ## Dành cho Người dùng
@@ -50,7 +50,7 @@ Nếu không cài đặt metamodule, các module sẽ **KHÔNG** được mount.
 Cài đặt metamodule giống như cài đặt các module thông thường:
 
 1. Tải xuống tệp ZIP metamodule (ví dụ: `meta-overlayfs.zip`)
-2. Mở ứng dụng KernelSU Manager
+2. Mở ứng dụng ApexSU Manager
 3. Nhấn nút hành động nổi (➕)
 4. Chọn tệp ZIP metamodule
 5. Khởi động lại thiết bị của bạn
@@ -59,7 +59,7 @@ Metamodule `meta-overlayfs` là triển khai tham chiếu chính thức cung c�
 
 ### Kiểm tra Metamodule đang hoạt động
 
-Bạn có thể kiểm tra metamodule nào đang hoạt động trong trang Module của ứng dụng KernelSU Manager. Metamodule đang hoạt động sẽ được hiển thị trong danh sách module của bạn với chỉ định đặc biệt.
+Bạn có thể kiểm tra metamodule nào đang hoạt động trong trang Module của ứng dụng ApexSU Manager. Metamodule đang hoạt động sẽ được hiển thị trong danh sách module của bạn với chỉ định đặc biệt.
 
 ### Gỡ cài đặt Metamodule
 
@@ -69,7 +69,7 @@ Gỡ cài đặt metamodule sẽ ảnh hưởng đến **TẤT CẢ** các modul
 
 Để gỡ cài đặt:
 
-1. Mở KernelSU Manager
+1. Mở ApexSU Manager
 2. Tìm metamodule trong danh sách module của bạn
 3. Nhấn gỡ cài đặt (bạn sẽ thấy cảnh báo đặc biệt)
 4. Xác nhận hành động
@@ -79,7 +79,7 @@ Sau khi gỡ cài đặt, bạn nên cài đặt một metamodule khác nếu mu
 
 ### Ràng buộc chỉ một Metamodule
 
-Chỉ có thể cài đặt một metamodule tại một thời điểm. Nếu bạn cố gắng cài đặt metamodule thứ hai, KernelSU sẽ ngăn chặn việc cài đặt để tránh xung đột.
+Chỉ có thể cài đặt một metamodule tại một thời điểm. Nếu bạn cố gắng cài đặt metamodule thứ hai, ApexSU sẽ ngăn chặn việc cài đặt để tránh xung đột.
 
 Để chuyển đổi metamodule:
 
@@ -92,7 +92,7 @@ Chỉ có thể cài đặt một metamodule tại một thời điểm. Nếu b
 
 ## Dành cho Nhà phát triển Module
 
-Nếu bạn đang phát triển các module KernelSU thông thường, bạn không cần lo lắng nhiều về metamodule. Các module của bạn sẽ hoạt động miễn là người dùng có cài đặt một metamodule tương thích (như `meta-overlayfs`).
+Nếu bạn đang phát triển các module ApexSU thông thường, bạn không cần lo lắng nhiều về metamodule. Các module của bạn sẽ hoạt động miễn là người dùng có cài đặt một metamodule tương thích (như `meta-overlayfs`).
 
 **Những điều bạn cần biết:**
 
@@ -100,12 +100,12 @@ Nếu bạn đang phát triển các module KernelSU thông thường, bạn kh�
 - **Không cần thay đổi code**: Các module hiện có tiếp tục hoạt động mà không cần sửa đổi
 
 ::: tip
-Nếu bạn quen thuộc với phát triển module Magisk, các module của bạn sẽ hoạt động tương tự trong KernelSU khi cài đặt metamodule, vì nó cung cấp mount tương thích với Magisk.
+Nếu bạn quen thuộc với phát triển module Magisk, các module của bạn sẽ hoạt động tương tự trong ApexSU khi cài đặt metamodule, vì nó cung cấp mount tương thích với Magisk.
 :::
 
 ## Dành cho Nhà phát triển Metamodule
 
-Tạo một metamodule cho phép bạn tùy chỉnh cách KernelSU xử lý cài đặt, mount và gỡ cài đặt module.
+Tạo một metamodule cho phép bạn tùy chỉnh cách ApexSU xử lý cài đặt, mount và gỡ cài đặt module.
 
 ### Yêu cầu Cơ bản
 
@@ -161,7 +161,7 @@ Metamodule có thể cung cấp tối đa ba script hook đặc biệt:
 **Biến môi trường:**
 
 - `MODDIR`: Đường dẫn thư mục của metamodule (ví dụ: `/data/adb/modules/my_metamodule`)
-- Tất cả các biến môi trường KernelSU tiêu chuẩn
+- Tất cả các biến môi trường ApexSU tiêu chuẩn
 
 **Trách nhiệm:**
 
@@ -170,7 +170,7 @@ Metamodule có thể cung cấp tối đa ba script hook đặc biệt:
 - Xử lý các yêu cầu mount cụ thể của module
 
 ::: danger YÊU CẦU QUAN TRỌNG
-Khi thực hiện các thao tác mount, bạn **PHẢI** đặt tên nguồn/thiết bị thành `"KSU"`. Điều này xác định các mount thuộc về KernelSU.
+Khi thực hiện các thao tác mount, bạn **PHẢI** đặt tên nguồn/thiết bị thành `"KSU"`. Điều này xác định các mount thuộc về ApexSU.
 
 **Ví dụ (đúng):**
 
@@ -184,7 +184,7 @@ mount -t overlay -o lowerdir=/lower,upperdir=/upper,workdir=/work KSU /target
 fsconfig_set_string(fs, "source", "KSU")?;
 ```
 
-Điều này rất cần thiết để KernelSU xác định và quản lý các mount của nó đúng cách.
+Điều này rất cần thiết để ApexSU xác định và quản lý các mount của nó đúng cách.
 :::
 
 **Script ví dụ:**
@@ -303,7 +303,7 @@ Giai đoạn boot-completed:
 
 ### Cơ chế Symlink
 
-Khi một metamodule được cài đặt, KernelSU tạo một symlink:
+Khi một metamodule được cài đặt, ApexSU tạo một symlink:
 
 ```sh
 /data/adb/metamodule -> /data/adb/modules/<metamodule_id>
@@ -393,7 +393,7 @@ Khi phát triển metamodule:
 
 Trước khi phát hành:
 
-1. **Kiểm tra cài đặt** trên thiết lập KernelSU sạch
+1. **Kiểm tra cài đặt** trên thiết lập ApexSU sạch
 2. **Xác minh mount** với nhiều loại module khác nhau
 3. **Kiểm tra khả năng tương thích** với các module phổ biến
 4. **Kiểm tra gỡ cài đặt** và dọn dẹp
@@ -425,5 +425,5 @@ Không. Nó cung cấp mount overlayfs tiêu chuẩn tương thích với hầu 
 ## Xem thêm
 
 - [Module Guide](module.md) - Phát triển module chung
-- [Difference with Magisk](difference-with-magisk.md) - So sánh KernelSU và Magisk
-- [How to Build](how-to-build.md) - Xây dựng KernelSU từ nguồn
+- [Difference with Magisk](difference-with-magisk.md) - So sánh ApexSU và Magisk
+- [How to Build](how-to-build.md) - Xây dựng ApexSU từ nguồn

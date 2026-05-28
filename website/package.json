@@ -1,9 +1,13 @@
 {
-  "name": "ApexSU_website",
+  "name": "apexsu-website",
   "version": "1.0.0",
-  "description": "ApexSU official website: https://github.com/qrjhamron/ApexSU",
+  "description": "ApexSU official website and docs (VitePress)",
   "main": "index.js",
   "repository": "https://github.com/qrjhamron/ApexSU",
+  "homepage": "https://qrjhamron.github.io/ApexSU/",
+  "bugs": {
+    "url": "https://github.com/qrjhamron/ApexSU/issues"
+  },
   "author": "qrjhamron",
   "license": "MIT",
   "devDependencies": {

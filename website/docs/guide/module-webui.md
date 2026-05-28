@@ -1,8 +1,8 @@
 # Module WebUI
 
-In addition to executing boot scripts and modifying system files, KernelSU modules can display user interfaces and interact directly with users.
+In addition to executing boot scripts and modifying system files, ApexSU modules can display user interfaces and interact directly with users.
 
-Modules can define HTML + CSS + JavaScript pages with any web technology. KernelSU's manager displays these pages via WebView and exposes APIs for interacting with the system, such as executing shell commands.
+Modules can define HTML + CSS + JavaScript pages with any web technology. ApexSU's manager displays these pages via WebView and exposes APIs for interacting with the system, such as executing shell commands.
 
 ## `webroot` directory
 
@@ -17,30 +17,30 @@ Web resource files should be placed in the `webroot` subdirectory of the module 
 ```
 
 ::: warning
-When installing the module, KernelSU will automatically set the permissions and SELinux context for this directory. If you don't know what you're doing, do not set the permissions for this directory yourself!
+When installing the module, ApexSU will automatically set the permissions and SELinux context for this directory. If you don't know what you're doing, do not set the permissions for this directory yourself!
 :::
 
 If your page contains CSS and JavaScript, you need to place it in this directory as well.
 
 ## JavaScript API
 
-If it's just a display page, it will function like a regular web page. However, the most important thing is that KernelSU provides a series of system APIs, allowing the implementation of module-specific functions.
+If it's just a display page, it will function like a regular web page. However, the most important thing is that ApexSU provides a series of system APIs, allowing the implementation of module-specific functions.
 
-KernelSU provides a JavaScript library, which is published on [npm](https://www.npmjs.com/package/kernelsu) and can be used in the JavaScript code of your web pages.
+ApexSU provides a JavaScript library, which is published on [npm](https://www.npmjs.com/package/apexsu) and can be used in the JavaScript code of your web pages.
 
 For example, you can execute a shell command to obtain a specific configuration or modify a property:
 
 ```JavaScript
-import { exec } from 'kernelsu';
+import { exec } from 'apexsu';
 
 const { errno, stdout } = exec("getprop ro.product.model");
 ```
 
 You can also make the page full screen or display a toast.
 
-[API documentation](https://www.npmjs.com/package/kernelsu)
+[API documentation](https://www.npmjs.com/package/apexsu)
 
-If you find that the existing API doesn't meet your needs or is inconvenient to use, you're welcome to give us suggestions [here](https://github.com/tiann/KernelSU/issues)!
+If you find that the existing API doesn't meet your needs or is inconvenient to use, you're welcome to give us suggestions [here](https://github.com/qrjhamron/ApexSU/issues)!
 
 ## Some tips
 

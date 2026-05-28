@@ -1,8 +1,8 @@
 # 模組 WebUI {#module-webui}
 
-KernelSU 的模組除了執行啟動腳本和修改系統檔案之外，還支援顯示 UI 介面和與使用者互動。
+ApexSU 的模組除了執行啟動腳本和修改系統檔案之外，還支援顯示 UI 介面和與使用者互動。
 
-該模組可以透過任何 Web 技術編寫 HTML + CSS + JavaScript 頁面。 KernelSU的管理器將透過 WebView 顯示這些頁面。它還提供了一些用於與系統互動的 JavaScript API，例如執行 shell 命令。
+該模組可以透過任何 Web 技術編寫 HTML + CSS + JavaScript 頁面。 ApexSU的管理器將透過 WebView 顯示這些頁面。它還提供了一些用於與系統互動的 JavaScript API，例如執行 shell 命令。
 
 ## WebUI 根目錄 {#webroot-directory}
 
@@ -19,30 +19,30 @@ Web資源應放置在模組根目錄的 `webroot` 子目錄中，並且其中**�
 ```
 
 :::warning 提醒
-安裝模組時，KernelSU 將自動設定`webroot`的權限和 SELinux context。如果您不知道自己在做什麼，請不要自行設定該目錄的權限！
+安裝模組時，ApexSU 將自動設定`webroot`的權限和 SELinux context。如果您不知道自己在做什麼，請不要自行設定該目錄的權限！
 :::
 
 如果您的頁面包含 CSS 和 JavaScript，您也需要將其放入此目錄中。
 
 ## JavaScript API
 
-如果只是一個顯示頁面，那和一般網頁沒有什麼不同。更重要的是，KernelSU 提供了一系列的系統 API，讓您可以實現模組獨特的功能。
+如果只是一個顯示頁面，那和一般網頁沒有什麼不同。更重要的是，ApexSU 提供了一系列的系統 API，讓您可以實現模組獨特的功能。
 
-KernelSU [在 npm 上發布](https://www.npmjs.com/package/kernelsu)了一個 JavaScript 庫，您可以在網頁的 JavaScript 程式碼中使用它。
+ApexSU [在 npm 上發布](https://www.npmjs.com/package/apexsu)了一個 JavaScript 庫，您可以在網頁的 JavaScript 程式碼中使用它。
 
 例如，您可以執行 shell 命令來取得特定配置或修改屬性：
 
 ```JavaScript
-import { exec } from 'kernelsu';
+import { exec } from 'apexsu';
 
 const { errno, stdout } = exec("getprop ro.product.model");
 ```
 
 再例如，你可以讓網頁全螢幕顯示，或是顯示一個 Toast。
 
-[API 文檔](https://www.npmjs.com/package/kernelsu)
+[API 文檔](https://www.npmjs.com/package/apexsu)
 
-如果您發現現有的 API 無法滿足您的需求或使用不方便，歡迎您在[這裡](https://github.com/tiann/KernelSU/issues)給我們建議！
+如果您發現現有的 API 無法滿足您的需求或使用不方便，歡迎您在[這裡](https://github.com/qrjhamron/ApexSU/issues)給我們建議！
 
 ## 一些技巧 {#some-tips}
 

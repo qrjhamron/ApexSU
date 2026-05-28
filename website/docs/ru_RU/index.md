@@ -1,29 +1,52 @@
 ---
 layout: home
-title: Основанное на ядре root-решение для Android
+title: ApexSU
 
 hero:
-  name: KernelSU
-  text: Основанное на ядре root-решение для Android
-  tagline: ""
+  name: ApexSU
+  text: Современное root-решение для поддерживаемых Android GKI устройств
+  tagline: "ApexSU предоставляет сфокусированный root-процесс для поддерживаемых Android GKI ядер: установка через boot image, поддержка LKM и современный менеджер."
   image:
-    src: /logo.png
-    alt: KernelSU
+    src: /logo.svg
+    alt: ApexSU
   actions:
     - theme: brand
-      text: Начало работы
-      link: /ru_RU/guide/what-is-kernelsu
+      text: Скачать
+      link: https://github.com/qrjhamron/ApexSU/releases
     - theme: alt
-      text: Посмотр на GitHub
-      link: https://github.com/tiann/KernelSU
+      text: GitHub
+      link: https://github.com/qrjhamron/ApexSU
+    - theme: alt
+      text: Руководство
+      link: /ru_RU/guide/installation
 
 features:
-  - title: Основанный на ядре
-    details: KernelSU работает в режиме ядра Linux, он имеет больше контроля над пользовательскими приложениями.
-  - title: Контроль доступа по белому списку
-    details: Только приложение, которому предоставлено разрешение root, может получить доступ к `su`, другие приложения не могут воспринимать su.
-  - title: Ограниченные root-права
-    details: KernelSU позволяет вам настраивать uid, gid, группы, возможности и правила SELinux для su. Заприте root-власть в клетке.
-  - title: Система Metamodule
-    details: Подключаемая модульная инфраструктура позволяет модифицировать /system без изменения системы. Установите metamodule (например meta-overlayfs) для включения монтирования модулей.
+  - title: Поддержка только GKI
+    details: ApexSU поддерживает только поддерживаемые Android GKI устройства. Устройства non-GKI не поддерживаются.
+  - title: Процесс через boot image
+    details: Для установки требуется boot.img, точно соответствующий текущей прошивке/сборке.
+  - title: Поддержка LKM
+    details: Repository LKM — рекомендуемый вариант для поддерживаемых GKI. Local LKM — продвинутый вариант только для GKI.
+  - title: Четкие предупреждения
+    details: ApexSU показывает риск bootloop и блокирует неподдерживаемые пути установки.
+---
 
+<div class="apex-warning">
+  <h2>Поддержка только GKI</h2>
+  <p>Устройства non-GKI не поддерживаются. Установка на таких устройствах должна быть заблокирована.</p>
+</div>
+
+<div class="apex-quick-links">
+  <h2>Быстрые ссылки</h2>
+  <ul>
+    <li><a href="https://github.com/qrjhamron/ApexSU/releases">Скачать ApexSU</a></li>
+    <li><a href="https://github.com/qrjhamron/ApexSU">GitHub репозиторий</a></li>
+    <li><a href="/ru_RU/guide/installation">Руководство по установке</a></li>
+    <li><a href="https://t.me/smoothlady">@smoothlady</a></li>
+  </ul>
+</div>
+
+<div class="apex-safety">
+  <h2>Предупреждение по безопасности</h2>
+  <p>Изменение boot image может привести к bootloop. Используйте boot.img только от точной версии прошивки/сборки и заранее сделайте резервную копию важных данных.</p>
+</div>

@@ -1,35 +1,8 @@
-# 非公式の対応デバイス
+# サポート状況
 
-::: warning 警告
-このドキュメントはアーカイブ参照のみを目的としており、更新されなくなりました。
-KernelSU v1.0以降、非GKIデバイスの公式サポートを終了しました。
-:::
+このページはナビゲーション互換性のために残しています。
 
-::: warning 警告
-このページでは他の開発者が管理している、KernelSU をサポートする GKI 以外のデバイス用のカーネルを紹介しています。
-:::
+非 GKI デバイスは ApexSU のサポート対象外です。
 
-::: warning 警告
-このページはあなたのデバイスに対応するソースコードを見つけるためのものであり、そのソースコードが _KernelSU 開発者_ によってレビューされたことを意味するものではありません。ご自身の責任においてご利用ください。
-:::
-
-<script setup>
-import data from '../../repos.json'
-</script>
-
-<table>
-   <thead>
-      <tr>
-         <th>メンテナー</th>
-         <th>リポジトリ</th>
-         <th>対応デバイス</th>
-      </tr>
-   </thead>
-   <tbody>
-    <tr v-for="repo in data" :key="repo.devices">
-        <td><a :href="repo.maintainer_link" target="_blank" rel="noreferrer">{{ repo.maintainer }}</a></td>
-        <td><a :href="repo.kernel_link" target="_blank" rel="noreferrer">{{ repo.kernel_name }}</a></td>
-        <td>{{ repo.devices }}</td>
-    </tr>
-   </tbody>
-</table>
+- 非 GKI デバイスではインストールはブロックされます。
+- 非公式リストは互換性回避手段になりません。

@@ -1,6 +1,6 @@
 # App Profile
 
-App Profile は KernelSU が提供する仕組みで、さまざまなアプリの設定を柔軟にカスタマイズできます。
+App Profile は ApexSU が提供する仕組みで、さまざまなアプリの設定を柔軟にカスタマイズできます。
 
 root 権限（`su` を利用できること）を付与したアプリの場合、App Profile は Root Profile とも呼べます。`su` コマンドの `uid`、`gid`、`groups`、`capabilities`、`SELinux` ルールを調整できるため、root ユーザーの特権を細かく制限できます。たとえばファイアウォールアプリにだけネットワーク権限を与えてファイルアクセスを禁止したり、凍結アプリには完全な root の代わりに shell 権限のみを与えたりできます。**すなわち最小権限の原則で力を箱の中に閉じ込める**ことができます。
 
@@ -31,7 +31,7 @@ uid=2000(shell) gid=2000(shell) groups=2000(shell),1004(input),1007(log),1011(ad
 
 ここでは UID が `2000`、GID（プライマリグループ ID）も `2000` です。さらに `inet`（`AF_INET` や `AF_INET6` を作成できる、つまりネットワークアクセスが可能）、`sdcard_rw`（SD カードの読み書きが可能）といった補助グループにも所属しています。
 
-KernelSU の Root Profile を使うと、`su` 実行後の root プロセスの UID・GID・所属グループをカスタマイズできます。たとえばある root アプリの Root Profile で UID を `2000` に設定すれば、そのアプリが `su` を使っても実際の権限は ADB shell 相当になります。またグループから `inet` を外せば、`su` コマンドがネットワークにアクセスできなくなります。
+ApexSU の Root Profile を使うと、`su` 実行後の root プロセスの UID・GID・所属グループをカスタマイズできます。たとえばある root アプリの Root Profile で UID を `2000` に設定すれば、そのアプリが `su` を使っても実際の権限は ADB shell 相当になります。またグループから `inet` を外せば、`su` コマンドがネットワークにアクセスできなくなります。
 
 ::: tip 注意
 App Profile が制御するのは `su` 使用後の root プロセスの権限だけであり、アプリ自身の権限ではありません。アプリがネットワーク権限を要求して許可されていれば、`su` を使わなくてもネットワークにアクセスできます。`su` から `inet` グループを外すのは、`su` にネットワークアクセスをさせないためだけの措置です。
@@ -49,7 +49,7 @@ Linux 2.2 以降は、従来 root が一括して持っていた権限を capabi
 
 各 capability は 1 つ以上の権限を表します。たとえば `CAP_DAC_READ_SEARCH` は、ファイル読み取りやディレクトリの読み取り・実行に必要なチェックをバイパスできる権限です。effective UID が `0` のユーザー（root）であっても、`CAP_DAC_READ_SEARCH` などを持っていなければ自由にファイルを読めません。
 
-KernelSU の Root Profile では `su` 実行後の root プロセスの capability もカスタマイズでき、いわば「部分的な root 権限」を与えられます。上で触れた UID / GID と異なり、`su` 後も UID `0` が必要な root アプリもあります。その場合は UID `0` のまま capability を制限することで、許可される操作を限定できます。
+ApexSU の Root Profile では `su` 実行後の root プロセスの capability もカスタマイズでき、いわば「部分的な root 権限」を与えられます。上で触れた UID / GID と異なり、`su` 後も UID `0` が必要な root アプリもあります。その場合は UID `0` のまま capability を制限することで、許可される操作を限定できます。
 
 ::: tip 強く推奨
 Linux の capability については[公式ドキュメント](https://man7.org/linux/man-pages/man7/capabilities.7.html)に詳細がまとまっています。capability をカスタマイズする予定があるなら、まずこのドキュメントを読んでください。
@@ -74,7 +74,7 @@ SELinux の全容を説明するのは非常に複雑で、このドキュメン
 2. [Red Hat: What Is SELinux?](https://www.redhat.com/en/topics/linux/what-is-selinux)
 3. [ArchLinux: SELinux](https://wiki.archlinux.org/title/SELinux)
 
-KernelSU の Root Profile では、`su` 実行後の root プロセスの SELinux コンテキストもカスタマイズできます。特定のコンテキストに対してアクセス制御ルールを定義し、root 権限をきめ細かく制御できます。
+ApexSU の Root Profile では、`su` 実行後の root プロセスの SELinux コンテキストもカスタマイズできます。特定のコンテキストに対してアクセス制御ルールを定義し、root 権限をきめ細かく制御できます。
 
 一般的なシナリオでは、アプリが `su` を実行すると `u:r:su:s0` のような**制限のない** SELinux ドメインに切り替わります。Root Profile を介して `u:r:app1:s0` のようなカスタムドメインに切り替え、そのドメイン向けに次のようなルールを定義できます。
 
@@ -106,13 +106,13 @@ Root Profile の設定が適切でないと、意図せず制限を回避され�
 
 ### モジュールのアンマウント
 
-KernelSU は OverlayFS をマウントすることで systemless な形でシステムパーティションを変更します。しかしこの挙動に敏感なアプリもあります。そのような場合は「Umount modules」オプションを設定して、対象アプリではモジュールをアンマウントさせることができます。
+ApexSU は OverlayFS をマウントすることで systemless な形でシステムパーティションを変更します。しかしこの挙動に敏感なアプリもあります。そのような場合は「Umount modules」オプションを設定して、対象アプリではモジュールをアンマウントさせることができます。
 
-KernelSU マネージャーの設定画面には「Umount modules by default」という項目もあります。デフォルトではこのオプションは**有効**で、追加設定をしない限り KernelSU や一部モジュールはそのアプリでモジュールをアンマウントします。この挙動を望まない、あるいは一部アプリに影響する場合は、次のいずれかの方法を取ってください。
+ApexSU マネージャーの設定画面には「Umount modules by default」という項目もあります。デフォルトではこのオプションは**有効**で、追加設定をしない限り ApexSU や一部モジュールはそのアプリでモジュールをアンマウントします。この挙動を望まない、あるいは一部アプリに影響する場合は、次のいずれかの方法を取ってください。
 
 1. 「Umount modules by default」を有効のままにし、モジュールを読み込みたいアプリの App Profile では個別に「Umount modules」を無効にする（ホワイトリスト方式）。
 2. 「Umount modules by default」を無効にし、アンマウントしたいアプリでのみ個別に「Umount modules」を有効にする（ブラックリスト方式）。
 
 ::: info
-カーネル 5.10 以降を実行しているデバイスでは、カーネルが追加の処理なしにモジュールをアンマウントします。一方 5.10 未満のデバイスでは、このオプションは設定値を示すだけで KernelSU は何もしません。5.10 より前のカーネルで「Umount modules」を使いたい場合は、`fs/namespace.c` にある `path_umount` 関数をバックポートする必要があります。詳細は [Integrate for non-GKI devices](https://kernelsu.org/guide/how-to-integrate-for-non-gki.html#how-to-backport-path_umount) ページの末尾を参照してください。Zygisksu など一部モジュールも、モジュールをアンマウントすべきかどうかを判断するためにこのオプションを参照します。
+カーネル 5.10 以降を実行しているデバイスでは、カーネルが追加の処理なしにモジュールをアンマウントします。一方 5.10 未満のデバイスでは、このオプションは設定値を示すだけで ApexSU は何もしません。5.10 より前のカーネルで「Umount modules」を使いたい場合は、`fs/namespace.c` にある `path_umount` 関数をバックポートする必要があります。詳細は [Integrate for non-GKI devices](https://qrjhamron.github.io/ApexSU/guide/how-to-integrate-for-non-gki.html#how-to-backport-path_umount) ページの末尾を参照してください。Zygisksu など一部モジュールも、モジュールをアンマウントすべきかどうかを判断するためにこのオプションを参照します。
 :::

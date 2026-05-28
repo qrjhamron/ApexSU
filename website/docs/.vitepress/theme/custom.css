@@ -1,0 +1,48 @@
+:root {
+  --vp-c-brand-1: #37a9ff;
+  --vp-c-brand-2: #5db7ff;
+  --vp-c-brand-3: #7cc5ff;
+  --vp-c-brand-soft: rgba(55, 169, 255, 0.14);
+}
+
+.VPHero.has-image .image-src {
+  width: min(240px, 42vw);
+  height: auto;
+}
+
+.vp-doc .apex-warning,
+.vp-doc .apex-quick-links,
+.vp-doc .apex-safety {
+  margin-top: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #17191c;
+  padding: 1rem;
+}
+
+.vp-doc .apex-warning h2,
+.vp-doc .apex-quick-links h2,
+.vp-doc .apex-safety h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.vp-doc .apex-warning p,
+.vp-doc .apex-safety p {
+  margin: 0.5rem 0 0;
+}
+
+.vp-doc .apex-warning {
+  border-color: rgba(255, 124, 124, 0.35);
+  background: rgba(112, 30, 30, 0.24);
+}
+
+.vp-doc .apex-quick-links ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.vp-doc .apex-quick-links li {
+  margin: 0.35rem 0;
+}

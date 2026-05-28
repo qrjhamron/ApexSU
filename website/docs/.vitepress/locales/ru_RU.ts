@@ -1,14 +1,11 @@
-import { createRequire } from 'module'
 import { defineConfig } from 'vitepress'
-
-const require = createRequire(import.meta.url)
-const pkg = require('vitepress/package.json')
 
 export default defineConfig({
   lang: 'ru-RU',
   description: 'Решение на основе ядра root для устройств Android GKI.',
 
   themeConfig: {
+    logo: '/logo.svg',
     nav: nav(),
 
     lastUpdatedText: 'последнее обновление',
@@ -18,16 +15,16 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/tiann/KernelSU' }
+      { icon: 'github', link: 'https://github.com/qrjhamron/ApexSU' }
     ],
 
     footer: {
-        message: 'Выпускается под лицензией GPL3.',
-        copyright: 'Авторские права © 2022-текущее Разработчики KernelSU.'
+        message: 'Telegram: @smoothlady',
+        copyright: 'Авторские права © 2022-текущее Разработчики ApexSU.'
     },
 
     editLink: {
-        pattern: 'https://github.com/tiann/KernelSU/edit/main/website/docs/:path',
+        pattern: 'https://github.com/qrjhamron/ApexSU/edit/main/website/docs/:path',
         text: 'Редактировать эту страницу на GitHub'
     }
   }
@@ -35,7 +32,9 @@ export default defineConfig({
 
 function nav() {
   return [
-    { text: 'Руководство', link: '/ru_RU/guide/what-is-kernelsu' },
+    { text: 'Руководство', link: '/ru_RU/guide/what-is-apexsu' },
+    { text: 'Загрузки', link: 'https://github.com/qrjhamron/ApexSU/releases' },
+    { text: '@smoothlady', link: 'https://t.me/smoothlady' }
   ]
 }
 
@@ -44,11 +43,10 @@ function sidebarGuide() {
     {
         text: 'Руководство',
         items: [
-          { text: 'Что такое KernelSU?', link: '/ru_RU/guide/what-is-kernelsu' },
+          { text: 'Что такое ApexSU?', link: '/ru_RU/guide/what-is-apexsu' },
           { text: 'Установка', link: '/ru_RU/guide/installation' },
           { text: 'Как собрать?', link: '/ru_RU/guide/how-to-build' },
-          { text: 'Реализация в устройствах, не относящихся к GKI', link: '/ru_RU/guide/how-to-integrate-for-non-gki'},
-          { text: 'Неофициально поддерживаемые устройства', link: '/ru_RU/guide/unofficially-support-devices.md' },
+          { text: 'Политика поддержки GKI', link: '/ru_RU/guide/how-to-integrate-for-non-gki'},
           { text: 'Руководство по разработке модулей', link: '/ru_RU/guide/module.md' },
           { text: 'Метамодуль', link: '/ru_RU/guide/metamodule.md' },
           { text: 'Конфигурация модулей', link: '/ru_RU/guide/module-config.md' },

@@ -4,7 +4,7 @@ Ao atualizar um dispositivo, podem ocorrer situações em que o dispositivo fica
 
 ## Bloqueio por flashar partição boot
 
-No KernelSU, as seguintes situações podem causar bloqueio de inicialização ao flashar a partição boot:
+No ApexSU, as seguintes situações podem causar bloqueio de inicialização ao flashar a partição boot:
 
 1. Você flashou uma imagem boot no formato errado. Por exemplo, se o formato de boot do seu dispositivo for `gz`, mas você flashou uma imagem no formato `lz4`, o dispositivo não inicializá.
 2. Seu dispositivo precisa desativar a verificação AVB para inicializar corretamente, o que geralmente exige a limpeza de todos os dados do dispositivo.
@@ -18,14 +18,14 @@ A instalação de módulos pode ser uma das causas mais comuns de bloqueio do se
 
 ### Módulos normais
 
-Se você instalou um módulo que foi comprovadamente seguro, mas faz com que seu dispositivo não inicialize, então esta situação é facilmente recuperável no KernelSU sem qualquer preocupação. O KernelSU possui mecanismos integrados para recuperar seu dispositivo, incluindo o seguinte:
+Se você instalou um módulo que foi comprovadamente seguro, mas faz com que seu dispositivo não inicialize, então esta situação é facilmente recuperável no ApexSU sem qualquer preocupação. O ApexSU possui mecanismos integrados para recuperar seu dispositivo, incluindo o seguinte:
 
 1. Atualização AB
 2. Recupere pressionando o botão de diminuir volume
 
 #### Atualização AB
 
-As atualizações do módulo KernelSU são baseadas no mecanismo de atualização AB do sistema Android usado em atualizações OTA. Quando você instala um novo módulo ou atualiza um existente, isso não modifica diretamente o arquivo do módulo atualmente em uso. Em vez disso, todos os módulos são integrados em uma nova imagem de atualização. Após o sistema ser reiniciado, ele tentará iniciar usando essa nova imagem de atualização. Se o sistema Android inicializar com sucesso, os módulos serão efetivamente atualizados.
+As atualizações do módulo ApexSU são baseadas no mecanismo de atualização AB do sistema Android usado em atualizações OTA. Quando você instala um novo módulo ou atualiza um existente, isso não modifica diretamente o arquivo do módulo atualmente em uso. Em vez disso, todos os módulos são integrados em uma nova imagem de atualização. Após o sistema ser reiniciado, ele tentará iniciar usando essa nova imagem de atualização. Se o sistema Android inicializar com sucesso, os módulos serão efetivamente atualizados.
 
 Portanto, o método mais simples e comumente usado para recuperar seu dispositivo é **forçar uma reinicialização**. Se você não conseguir iniciar o sistema após instalar um módulo, pode pressionar e segurar o botão liga/desliga por mais de 10 segundos, e o sistema será reiniciado automaticamente. Após a reinicialização, ele retornará ao estado anterior à atualização do módulo, e os módulos atualizados serão desativados automaticamente.
 
@@ -35,10 +35,10 @@ Se a Atualização AB ainda não resolveu o problema, você pode tentar usar o *
 
 Existem duas maneiras de entrar no Modo de Segurança:
 
-1. O Modo de Segurança integrado de alguns sistemas: Alguns sistemas possuem um Modo de Segurança integrado que pode ser acessado pressionando longamente o botão de diminuir volume. Em outros sistemas (como o HyperOS), o Modo de Segurança pode ser ativado a partir do Recovery. Ao entrar no Modo de Segurança do sistema, o KernelSU também entrará nesse modo e desativará automaticamente os módulos.
-2. O Modo de Segurança integrado do KernelSU: Nesse caso, o método é **pressionar a tecla de diminuir volume continuamente por mais de três vezes** após a primeira tela de inicialização.
+1. O Modo de Segurança integrado de alguns sistemas: Alguns sistemas possuem um Modo de Segurança integrado que pode ser acessado pressionando longamente o botão de diminuir volume. Em outros sistemas (como o HyperOS), o Modo de Segurança pode ser ativado a partir do Recovery. Ao entrar no Modo de Segurança do sistema, o ApexSU também entrará nesse modo e desativará automaticamente os módulos.
+2. O Modo de Segurança integrado do ApexSU: Nesse caso, o método é **pressionar a tecla de diminuir volume continuamente por mais de três vezes** após a primeira tela de inicialização.
 
-Após entrar no Modo de Segurança, todos os módulos na página Módulos do gerenciador do KernelSU serão desativados. Porém, você ainda pode realizar a operação de "desinstalação" para desinstalar quaisquer módulos que possam estar causando problemas.
+Após entrar no Modo de Segurança, todos os módulos na página Módulos do gerenciador do ApexSU serão desativados. Porém, você ainda pode realizar a operação de "desinstalação" para desinstalar quaisquer módulos que possam estar causando problemas.
 
 O Modo de Segurança integrado é implementado no kernel, portanto não há possibilidade de perder eventos importantes devido à interceptação. No entanto, para kernels não-GKI, pode ser necessária uma integração manual do código. Para isso, consulte a documentação oficial para orientações.
 
