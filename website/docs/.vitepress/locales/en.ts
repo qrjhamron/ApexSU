@@ -15,8 +15,8 @@ export default defineConfig({
       { icon: 'github', link: 'https://github.com/qrjhamron/ApexSU' }
     ],
     footer: {
-      message: 'Telegram: @smoothlady',
-      copyright: 'Copyright © 2022-present ApexSU developers.'
+      message: 'Telegram: <a href="https://t.me/smoothlady">@smoothlady</a>',
+      copyright: 'Copyright © 2026 qrjhamron'
     },
     editLink: {
       pattern: 'https://github.com/qrjhamron/ApexSU/edit/main/website/docs/:path',

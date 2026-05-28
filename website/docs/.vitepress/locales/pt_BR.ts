@@ -19,8 +19,8 @@ export default defineConfig({
     ],
 
     footer: {
-        message: 'Telegram: @smoothlady',
-        copyright: 'Copyright © 2022-presente Desenvolvedores do ApexSU.'
+        message: 'Telegram: <a href="https://t.me/smoothlady">@smoothlady</a>',
+        copyright: 'Copyright © 2026 qrjhamron'
     },
 
     editLink: {

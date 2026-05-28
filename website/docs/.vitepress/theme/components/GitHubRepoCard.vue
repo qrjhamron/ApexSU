@@ -50,37 +50,19 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="repo-card">
-    <header class="repo-card__header">
-      <p class="repo-card__label">Repository</p>
-      <a :href="repoUrl" target="_blank" rel="noreferrer" class="repo-card__link">
-        <img src="/github.svg" alt="" aria-hidden="true" />
-        <span>qrjhamron/ApexSU</span>
-      </a>
-    </header>
-
-    <div class="repo-card__stats">
-      <div class="repo-stat">
-        <p class="repo-stat__name">Stars</p>
-        <p class="repo-stat__value">{{ stars }}</p>
-      </div>
-      <div class="repo-stat">
-        <p class="repo-stat__name">Last update</p>
-        <p class="repo-stat__value">
-          {{ loading ? 'Loading…' : lastUpdate }}
-        </p>
-      </div>
-    </div>
-
-    <a
-      :href="repoUrl"
-      target="_blank"
-      rel="noreferrer"
-      class="repo-card__star"
-      aria-label="Star on GitHub"
-    >
+  <section class="repo-row" aria-label="Repository status">
+    <a :href="repoUrl" target="_blank" rel="noreferrer" class="repo-row__repo">
       <img src="/github.svg" alt="" aria-hidden="true" />
-      <span>Star on GitHub</span>
+      <span>Repository</span>
+      <strong>qrjhamron/ApexSU</strong>
     </a>
+    <div class="repo-row__stat">
+      <span>Stars</span>
+      <strong>{{ stars }}</strong>
+    </div>
+    <div class="repo-row__stat">
+      <span>Last update</span>
+      <strong>{{ loading ? 'Loading…' : lastUpdate }}</strong>
+    </div>
   </section>
 </template>
