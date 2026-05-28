@@ -328,6 +328,12 @@
     <string name="home_auto_pick_ko_id">Atau unduh otomatis dari repositori</string>
     <string name="home_device_maybe_unsupported_gki_id">Perangkat mungkin tidak didukung GKI</string>
     <string name="home_installed_id">Terpasang</string>
+    <string name="home_non_gki_title">Perangkat tidak mendukung GKI</string>
+    <string name="home_non_gki_body">ApexSU tidak dapat dipasang pada perangkat non-GKI</string>
+    <string name="home_lkm_detected_with_module">Terdeteksi: %1$s → %2$s</string>
+    <string name="home_lkm_detected_kmi">Terdeteksi: %s</string>
+    <string name="home_lkm_not_detected">Tidak terdeteksi</string>
+    <string name="home_lkm_unavailable_non_gki">Tidak tersedia — perangkat non-GKI tidak didukung</string>
     <string name="install_boot_image_title">Boot Image</string>
     <string name="install_pick_boot_img">Pilih boot.img</string>
     <string name="install_step_select">① Pilih</string>
@@ -338,7 +344,12 @@
     <string name="install_repo_lkm_title">Unduh dari repositori</string>
     <string name="install_repo_lkm_detected">Terdeteksi: %1$s → %2$s</string>
     <string name="install_repo_lkm_source">Akan diunduh dari github.com/qrjhamron/ApexSU/releases</string>
+    <string name="install_repo_lkm_kmi_module">%1$s → %2$s</string>
+    <string name="install_repo_lkm_source_short">github.com/qrjhamron/ApexSU/releases</string>
+    <string name="install_repo_lkm_unavailable">Modul repositori tidak terdeteksi untuk kernel ini</string>
     <string name="install_repo_lkm_not_detected">Tidak dapat mendeteksi LKM untuk kernel ini</string>
     <string name="install_repo_lkm_download_failed">Gagal mengunduh LKM</string>
+    <string name="install_local_lkm_helper">Pilih file modul .ko lokal</string>
+    <string name="install_non_gki_kernel_reason">Kernel perangkat ini tidak terdeteksi sebagai GKI karena versi kernel tidak mengandung kata android.</string>
     <string name="install_install_id">Pasang</string>
 </resources>

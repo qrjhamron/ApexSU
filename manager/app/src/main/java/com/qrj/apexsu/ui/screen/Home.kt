@@ -3,13 +3,9 @@ package com.qrj.apexsu.ui.screen
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.net.Uri
 import android.os.Build
-import android.provider.OpenableColumns
 import android.system.Os
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -23,7 +19,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -51,10 +46,9 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Error
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Shield
@@ -87,10 +81,7 @@ import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qrj.apexsu.KernelVersion
 import com.qrj.apexsu.Natives
 import com.qrj.apexsu.R
@@ -108,7 +99,6 @@ import com.qrj.apexsu.ui.util.checkNewVersion
 import com.qrj.apexsu.ui.util.getModuleCount
 import com.qrj.apexsu.ui.util.getSELinuxStatus
 import com.qrj.apexsu.ui.util.getSuperuserCount
-import com.qrj.apexsu.ui.util.LkmSelection
 import com.qrj.apexsu.ui.util.module.LatestVersionInfo
 import com.qrj.apexsu.ui.util.reboot
 import com.qrj.apexsu.ui.util.rootAvailable
@@ -120,10 +110,6 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Link
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme.isDynamicColor
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -137,64 +123,21 @@ private const val IOS_BLUE = 0xFF0A84FF
 private const val IOS_GREEN = 0xFF30D158
 private const val IOS_ORANGE = 0xFFFF9F0A
 
-class HomeViewModel : ViewModel() {
-    var selectedKoDisplayName by mutableStateOf<String?>(null)
-        private set
-
-    fun updateSelectedKoName(name: String?) {
-        selectedKoDisplayName = name
-    }
-}
-
 @Composable
 fun HomePager(
     navigator: Navigator,
     bottomInnerPadding: Dp
 ) {
-    val homeViewModel: HomeViewModel = viewModel()
     val kernelVersion = getKernelVersion()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var autoDetectedKmiText by remember { mutableStateOf<String?>(null) }
-    var autoDetectUnsupported by remember { mutableStateOf(false) }
+    var autoDetectedKmi by remember { mutableStateOf<KmiDetectResult?>(null) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             val release = Os.uname().release
-            val detected = detectBundledKo(release)
+            val detected = detectBundledKo(release, Build.SUPPORTED_ABIS.toList())
             withContext(Dispatchers.Main) {
-                autoDetectedKmiText = detected.text
-                autoDetectUnsupported = detected.unsupported
-            }
-        }
-    }
-
-    val selectLkmLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            val isKo = withContext(Dispatchers.IO) {
-                isKoFile(context, uri)
-            }
-            if (isKo) {
-                val selectedName = withContext(Dispatchers.IO) { getDisplayName(context, uri) ?: (uri.lastPathSegment ?: ".ko") }
-                homeViewModel.updateSelectedKoName(selectedName)
-                navigator.push(
-                    Route.Flash(
-                        FlashIt.FlashBoot(
-                            lkm = LkmSelection.LkmUri(uri),
-                            ota = false,
-                            partition = null
-                        )
-                    )
-                )
-            } else {
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.install_only_support_ko_file),
-                    Toast.LENGTH_SHORT
-                ).show()
+                autoDetectedKmi = detected
             }
         }
     }
@@ -279,18 +222,13 @@ fun HomePager(
                             onClickInstall = {
                                 navigator.push(Route.Install)
                             },
-                            onClickLoadLkm = {
-                                selectLkmLauncher.launch("*/*")
-                            },
                             onClickSuperuser = {
                                 mainState.animateToPage(1)
                             },
                             onclickModule = {
                                 mainState.animateToPage(2)
                             },
-                            selectedKoName = homeViewModel.selectedKoDisplayName,
-                            autoDetectedKmiText = autoDetectedKmiText,
-                            autoDetectUnsupported = autoDetectUnsupported,
+                            autoDetectedKmi = autoDetectedKmi,
                         )
 
                         if (checkUpdate) {
@@ -393,14 +331,13 @@ private fun StatusCard(
     ksuVersion: Int?,
     lkmMode: Boolean?,
     onClickInstall: () -> Unit = {},
-    onClickLoadLkm: () -> Unit = {},
     onClickSuperuser: () -> Unit = {},
     onclickModule: () -> Unit = {},
-    selectedKoName: String?,
-    autoDetectedKmiText: String?,
-    autoDetectUnsupported: Boolean,
+    autoDetectedKmi: KmiDetectResult?,
 ) {
     val reduceMotion = LocalReduceMotion.current
+    val kernelRelease = Os.uname().release
+    val isDisplayedKernelGki = kernelRelease.contains("android", ignoreCase = true)
     Column(
         modifier = Modifier
     ) {
@@ -465,11 +402,14 @@ private fun StatusCard(
                                 }
                                 Text(
                                     modifier = Modifier.fillMaxWidth(),
-                                    text = Os.uname().release,
+                                    text = kernelRelease,
                                     fontSize = 12.sp,
                                     fontFamily = FontFamily.Monospace,
                                     color = Color(IOS_SECONDARY),
                                 )
+                                if (!isDisplayedKernelGki) {
+                                    NonGkiWarningRow(modifier = Modifier.padding(top = 8.dp))
+                                }
                                 Text(
                                     text = "${stringResource(R.string.home_android_version)}: ${Build.VERSION.RELEASE}",
                                     fontSize = 12.sp,
@@ -523,7 +463,7 @@ private fun StatusCard(
                 }
             }
 
-            kernelVersion.isGKI() -> {
+            else -> {
                 var expanded by remember { mutableStateOf(false) }
                 Card(
                     onClick = { expanded = !expanded },
@@ -566,52 +506,28 @@ private fun StatusCard(
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                                 Hairline()
-                                LkmRow(
-                                    icon = Icons.Outlined.FolderOpen,
-                                    title = stringResource(R.string.home_pick_boot_image_id),
-                                    subtitle = stringResource(R.string.home_pick_boot_image_sub_id),
-                                    onClick = onClickInstall,
-                                )
-                                Hairline()
-                                LkmRow(
-                                    icon = Icons.Outlined.Memory,
+                                if (isDisplayedKernelGki) {
+                                    LkmRow(
+                                        icon = Icons.Outlined.FolderOpen,
+                                        title = stringResource(R.string.home_pick_boot_image_id),
+                                        subtitle = stringResource(R.string.home_pick_boot_image_sub_id),
+                                        onClick = onClickInstall,
+                                    )
+                                    Hairline()
+                                } else {
+                                    NonGkiWarningRow(modifier = Modifier.padding(vertical = 10.dp))
+                                    Hairline()
+                                }
+                                LkmInfoRow(
                                     title = stringResource(R.string.home_use_local_lkm_id),
-                                    subtitle = when {
-                                        !selectedKoName.isNullOrEmpty() -> selectedKoName
-                                        autoDetectUnsupported -> stringResource(R.string.home_device_maybe_unsupported_gki_id)
-                                        !autoDetectedKmiText.isNullOrEmpty() -> autoDetectedKmiText
-                                        else -> stringResource(R.string.home_auto_pick_ko_id)
-                                    },
-                                    subtitleColor = if (autoDetectUnsupported) Color(IOS_ORANGE) else Color(IOS_SECONDARY),
-                                    onClick = onClickLoadLkm,
+                                    subtitle = lkmInfoSubtitle(
+                                        isGki = isDisplayedKernelGki,
+                                        detected = autoDetectedKmi
+                                    ),
                                 )
                             }
                         }
                     }
-                }
-            }
-
-            else -> {
-                Card(
-                    onClick = {
-                        onClickInstall()
-                    },
-                    showIndication = true,
-                    pressFeedbackType = PressFeedbackType.Sink
-                ) {
-                    BasicComponent(
-                        title = stringResource(R.string.home_unsupported),
-                        summary = stringResource(R.string.home_unsupported_reason),
-                        startAction = {
-                            Icon(
-                                Icons.Outlined.Error,
-                                stringResource(R.string.home_unsupported),
-                                modifier = Modifier
-                                    .padding(end = 16.dp),
-                                tint = Color(0xFFFF453A),
-                            )
-                        }
-                    )
                 }
             }
         }
@@ -682,6 +598,85 @@ private fun LkmRow(
                 contentDescription = null,
                 tint = Color(IOS_SECONDARY),
                 modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LkmInfoRow(
+    title: String,
+    subtitle: String,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                color = Color.White,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = subtitle,
+                fontSize = 12.sp,
+                color = Color(IOS_SECONDARY),
+            )
+        }
+    }
+}
+
+@Composable
+private fun lkmInfoSubtitle(
+    isGki: Boolean,
+    detected: KmiDetectResult?,
+): String {
+    if (!isGki) {
+        return stringResource(R.string.home_lkm_unavailable_non_gki)
+    }
+    return when {
+        detected?.moduleFile != null -> stringResource(
+            R.string.home_lkm_detected_with_module,
+            detected.kmi,
+            detected.moduleFile
+        )
+        detected?.kmi != null -> stringResource(R.string.home_lkm_detected_kmi, detected.kmi)
+        else -> stringResource(R.string.home_lkm_not_detected)
+    }
+}
+
+@Composable
+private fun NonGkiWarningRow(
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.WarningAmber,
+            contentDescription = null,
+            tint = Color(IOS_ORANGE),
+            modifier = Modifier.size(20.dp),
+        )
+        Column {
+            Text(
+                text = stringResource(R.string.home_non_gki_title),
+                color = Color(IOS_ORANGE),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = stringResource(R.string.home_non_gki_body),
+                color = Color(IOS_SECONDARY),
+                fontSize = 13.sp,
             )
         }
     }
@@ -814,15 +809,19 @@ private fun QuickActionRow(
     }
 }
 
-private data class KoDetectResult(
-    val text: String?,
-    val unsupported: Boolean,
+private data class KmiDetectResult(
+    val kmi: String,
+    val moduleFile: String?,
 )
 
-private fun detectBundledKo(release: String): KoDetectResult {
+private fun detectBundledKo(
+    release: String,
+    supportedAbis: List<String> = listOf("arm64-v8a"),
+): KmiDetectResult? {
+    if (!release.contains("android", ignoreCase = true)) return null
     val androidMatch = Regex("android(\\d+)").find(release)?.groupValues?.getOrNull(1)
     val kernelMatch = Regex("(\\d+\\.\\d+)").find(release)?.groupValues?.getOrNull(1)
-    val key = if (androidMatch != null && kernelMatch != null) "android$androidMatch-$kernelMatch" else null
+    val key = if (androidMatch != null && kernelMatch != null) "android$androidMatch-$kernelMatch" else return null
     val map = mapOf(
         "android12-5.10" to "kernelsu-5.10.209-arm64.ko",
         "android13-5.10" to "kernelsu-5.10.209-arm64.ko",
@@ -832,29 +831,8 @@ private fun detectBundledKo(release: String): KoDetectResult {
         "android15-6.6" to "kernelsu-6.6.35-arm64.ko",
         "android16-6.12" to "kernelsu-6.12.6-arm64.ko",
     )
-    val matched = key?.let(map::get)
-    return if (key != null && matched != null) {
-        KoDetectResult("Terdeteksi: $key → ${matched.removePrefix("kernelsu-")}", unsupported = false)
-    } else {
-        KoDetectResult(null, unsupported = true)
-    }
-}
-
-private fun getDisplayName(context: Context, uri: Uri): String? {
-    return try {
-        context.contentResolver.query(
-            uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (index != -1 && cursor.moveToFirst()) cursor.getString(index) else null
-        }
-    } catch (_: Throwable) {
-        null
-    }
+    val matched = if (supportedAbis.any { it == "arm64-v8a" }) map[key] else null
+    return KmiDetectResult(key, matched?.removePrefix("kernelsu-"))
 }
 
 @Composable
@@ -923,7 +901,7 @@ fun LearnMoreCard() {
             summary = stringResource(R.string.home_click_to_learn_kernelsu),
             endActions = {
                 Icon(
-                    imageVector = MiuixIcons.Link,
+                    imageVector = Icons.Outlined.Link,
                     tint = colorScheme.onSurface,
                     contentDescription = null
                 )
@@ -948,7 +926,7 @@ fun DonateCard() {
             summary = stringResource(R.string.home_support_content),
             endActions = {
                 Icon(
-                    imageVector = MiuixIcons.Link,
+                    imageVector = Icons.Outlined.Link,
                     tint = colorScheme.onSurface,
                     contentDescription = null
                 )
@@ -971,37 +949,26 @@ private fun DeviceInfoCard() {
         content: String,
         bottomPadding: Dp = 24.dp
     ) {
-        Row(
+        Column(
             modifier = Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {
                     copyToClipboard(context, title, content)
                 }
-            ),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Info,
-                contentDescription = null,
-                tint = colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier
-                    .padding(end = 10.dp, top = 2.dp)
-                    .size(20.dp),
             )
-            Column {
-                Text(
-                    text = title,
-                    fontSize = MiuixTheme.textStyles.headline1.fontSize,
-                    fontWeight = FontWeight.Medium,
-                    color = colorScheme.onSurface
-                )
-                Text(
-                    text = content,
-                    fontSize = MiuixTheme.textStyles.body2.fontSize,
-                    color = colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 2.dp, bottom = bottomPadding)
-                )
-            }
+        ) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
+            Text(
+                text = content,
+                fontSize = 13.sp,
+                color = Color(IOS_SECONDARY),
+                modifier = Modifier.padding(top = 2.dp, bottom = bottomPadding)
+            )
         }
     }
     Card {
@@ -1057,37 +1024,26 @@ private fun InfoCard() {
         content: String,
         bottomPadding: Dp = 24.dp
     ) {
-        Row(
+        Column(
             modifier = Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {
                     copyToClipboard(context, title, content)
                 }
-            ),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Info,
-                contentDescription = null,
-                tint = colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier
-                    .padding(end = 10.dp, top = 2.dp)
-                    .size(20.dp),
             )
-            Column {
-                Text(
-                    text = title,
-                    fontSize = MiuixTheme.textStyles.headline1.fontSize,
-                    fontWeight = FontWeight.Medium,
-                    color = colorScheme.onSurface
-                )
-                Text(
-                    text = content,
-                    fontSize = MiuixTheme.textStyles.body2.fontSize,
-                    color = colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 2.dp, bottom = bottomPadding)
-                )
-            }
+        ) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
+            Text(
+                text = content,
+                fontSize = 13.sp,
+                color = Color(IOS_SECONDARY),
+                modifier = Modifier.padding(top = 2.dp, bottom = bottomPadding)
+            )
         }
     }
     Card {
@@ -1102,6 +1058,9 @@ private fun InfoCard() {
                 title = stringResource(R.string.home_kernel),
                 content = uname.release
             )
+            if (!uname.release.contains("android", ignoreCase = true)) {
+                NonGkiWarningRow(modifier = Modifier.padding(bottom = 24.dp))
+            }
             InfoText(
                 title = stringResource(R.string.home_manager_version),
                 content = "${managerVersion.first} (${managerVersion.second})"
@@ -1127,30 +1086,6 @@ private fun copyToClipboard(context: Context, label: String, text: String) {
         context.getString(R.string.copied_to_clipboard, label),
         Toast.LENGTH_SHORT
     ).show()
-}
-
-private fun isKoFile(context: Context, uri: Uri): Boolean {
-    val segment = uri.lastPathSegment ?: ""
-    if (segment.endsWith(".ko", ignoreCase = true)) return true
-
-    return try {
-        context.contentResolver.query(
-            uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (index != -1 && cursor.moveToFirst()) {
-                cursor.getString(index)?.endsWith(".ko", ignoreCase = true) == true
-            } else {
-                false
-            }
-        } ?: false
-    } catch (_: Throwable) {
-        false
-    }
 }
 
 fun getManagerVersion(context: Context): Pair<String, Long> {

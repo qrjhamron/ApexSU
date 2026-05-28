@@ -3,6 +3,7 @@ package com.qrj.apexsu.ui.screen
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import android.system.Os
 import android.widget.Toast
@@ -30,16 +31,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.CloudDownload
-import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -78,7 +72,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Request
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -87,7 +80,6 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -99,9 +91,13 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.Locale
 
-private const val IOS_BLUE = 0xFF0A84FF
-private const val IOS_SECONDARY = 0xFF8E8E93
-private const val IOS_SEPARATOR = 0xFF38383A
+private const val INSTALL_CARD = 0xFF1C1C1E
+private const val INSTALL_BUTTON = 0xFF2C2C2E
+private const val INSTALL_BORDER = 0xFF3A3A3C
+private const val INSTALL_SECONDARY = 0xFF8E8E93
+private const val INSTALL_INACTIVE_STEP = 0xFF636366
+private const val INSTALL_CTA_BLUE = 0xFF0A84FF
+private const val INSTALL_RED = 0xFFFF453A
 
 private enum class LkmInstallOption {
     Local,
@@ -115,7 +111,12 @@ internal data class RepoLkmInfo(
     val downloadUrl: String,
 )
 
-internal fun detectRepoLkmInfo(release: String): RepoLkmInfo? {
+internal fun detectRepoLkmInfo(
+    release: String,
+    supportedAbis: List<String> = listOf("arm64-v8a"),
+): RepoLkmInfo? {
+    if (!release.contains("android", ignoreCase = true)) return null
+    if (supportedAbis.none { it == "arm64-v8a" }) return null
     val androidMatch = Regex("android(\\d+)").find(release)?.groupValues?.getOrNull(1)
     val kernelMatch = Regex("(\\d+\\.\\d+)").find(release)?.groupValues?.getOrNull(1)
     val key = if (androidMatch != null && kernelMatch != null) "android$androidMatch-$kernelMatch" else return null
@@ -143,6 +144,8 @@ fun InstallScreen() {
     val context = LocalContext.current
     val enableBlur = LocalEnableBlur.current
     val scope = rememberCoroutineScope()
+    val kernelRelease = remember { Os.uname().release }
+    val isGkiDevice = remember(kernelRelease) { kernelRelease.contains("android", ignoreCase = true) }
 
     var selectedBootUriString by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedBootUri = selectedBootUriString?.let(Uri::parse)
@@ -170,9 +173,20 @@ fun InstallScreen() {
             getUriDisplayLabel(context, uri)
         }
     }
-    val repoLkmInfo = remember { detectRepoLkmInfo(Os.uname().release) }
+    val repoLkmInfo = remember(kernelRelease) {
+        if (isGkiDevice) detectRepoLkmInfo(kernelRelease, Build.SUPPORTED_ABIS.toList()) else null
+    }
     var isDownloadingRepoLkm by rememberSaveable { mutableStateOf(false) }
     var repoDownloadProgress by rememberSaveable { mutableFloatStateOf(0f) }
+    val repositoryOptionAvailable = isGkiDevice && repoLkmInfo != null
+    val localLkmSelected = lkmSelection is LkmSelection.LkmUri
+    val canInstall = selectedBootUri != null &&
+            !isDownloadingRepoLkm &&
+            isGkiDevice &&
+            when (lkmOption) {
+                LkmInstallOption.Repository -> repositoryOptionAvailable
+                LkmInstallOption.Local -> localLkmSelected
+            }
 
     val selectBootLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -215,7 +229,8 @@ fun InstallScreen() {
     }
 
     fun onInstallClick() {
-        val bootUri = selectedBootUri ?: return
+        if (!canInstall) return
+        val bootUri = selectedBootUri
         when (lkmOption) {
             LkmInstallOption.Local -> {
                 val localLkm = lkmSelection as? LkmSelection.LkmUri
@@ -315,6 +330,8 @@ fun InstallScreen() {
                         selectedLkmLabel = selectedLkmLabel,
                         selectedLkmUriString = selectedLkmUriString,
                         repoLkmInfo = repoLkmInfo,
+                        isGkiDevice = isGkiDevice,
+                        repositoryOptionAvailable = repositoryOptionAvailable,
                         isDownloading = isDownloadingRepoLkm,
                         downloadProgress = repoDownloadProgress,
                         onSelectOption = { selected ->
@@ -327,13 +344,12 @@ fun InstallScreen() {
                     )
                 }
 
-                TextButton(
+                InstallActionButton(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
                     text = stringResource(id = R.string.install_install_id),
-                    enabled = selectedBootUri != null && !isDownloadingRepoLkm,
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    enabled = canInstall,
                     onClick = { onInstallClick() }
                 )
                 Spacer(
@@ -360,14 +376,14 @@ private fun StepIndicator(activeStep: Int) {
         Text(
             modifier = Modifier.padding(horizontal = 8.dp),
             text = stringResource(R.string.install_step_separator),
-            color = Color(IOS_SECONDARY),
+            color = Color(INSTALL_INACTIVE_STEP),
             fontSize = 13.sp,
         )
         StepText(text = stringResource(R.string.install_step_lkm), active = activeStep == 2)
         Text(
             modifier = Modifier.padding(horizontal = 8.dp),
             text = stringResource(R.string.install_step_separator),
-            color = Color(IOS_SECONDARY),
+            color = Color(INSTALL_INACTIVE_STEP),
             fontSize = 13.sp,
         )
         StepText(text = stringResource(R.string.install_step_install), active = activeStep == 3)
@@ -378,7 +394,7 @@ private fun StepIndicator(activeStep: Int) {
 private fun StepText(text: String, active: Boolean) {
     Text(
         text = text,
-        color = if (active) Color.White else Color(IOS_SECONDARY),
+        color = if (active) Color.White else Color(INSTALL_INACTIVE_STEP),
         fontSize = 13.sp,
         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
     )
@@ -392,19 +408,15 @@ private fun BootImageCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.defaultColors(color = Color(0xFF1C1C1E)),
+        colors = CardDefaults.defaultColors(color = Color(INSTALL_CARD)),
         insideMargin = androidx.compose.foundation.layout.PaddingValues(16.dp),
         cornerRadius = 14.dp,
     ) {
-        SectionHeader(
-            icon = Icons.Outlined.SystemUpdate,
-            title = stringResource(R.string.install_boot_image_title)
-        )
-        TextButton(
+        SectionHeader(title = stringResource(R.string.install_boot_image_title))
+        GreyActionButton(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 14.dp)
-                .border(1.dp, Color(IOS_BLUE), RoundedCornerShape(14.dp)),
+                .padding(top = 14.dp),
             text = stringResource(R.string.install_pick_boot_img),
             onClick = onPickBoot
         )
@@ -425,7 +437,7 @@ private fun BootImageCard(
             Text(
                 modifier = Modifier.padding(top = 12.dp),
                 text = detailsText ?: stringResource(R.string.install_reading_file_details),
-                color = Color(IOS_SECONDARY),
+                color = Color(INSTALL_SECONDARY),
                 fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
             )
@@ -439,6 +451,8 @@ private fun LkmSelectionCard(
     selectedLkmLabel: String?,
     selectedLkmUriString: String?,
     repoLkmInfo: RepoLkmInfo?,
+    isGkiDevice: Boolean,
+    repositoryOptionAvailable: Boolean,
     isDownloading: Boolean,
     downloadProgress: Float,
     onSelectOption: (LkmInstallOption) -> Unit,
@@ -448,132 +462,198 @@ private fun LkmSelectionCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 12.dp),
-        colors = CardDefaults.defaultColors(color = Color(0xFF1C1C1E)),
+        colors = CardDefaults.defaultColors(color = Color(INSTALL_CARD)),
         insideMargin = androidx.compose.foundation.layout.PaddingValues(16.dp),
         cornerRadius = 14.dp,
     ) {
-        SectionHeader(
-            icon = Icons.Outlined.Memory,
-            title = stringResource(R.string.install_lkm_title)
-        )
-        RadioOptionCard(
-            modifier = Modifier.padding(top = 14.dp),
-            selected = option == LkmInstallOption.Local,
-            icon = Icons.Outlined.FolderOpen,
-            title = stringResource(R.string.home_use_local_lkm_id),
-            subtext = selectedLkmLabel ?: selectedLkmUriString?.let { stringResource(R.string.install_reading_selected_file) },
-            onClick = { onSelectOption(LkmInstallOption.Local) }
-        )
-        AnimatedVisibility(visible = option == LkmInstallOption.Local) {
-            Column {
-                TextButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 10.dp)
-                        .border(1.dp, Color(IOS_BLUE), RoundedCornerShape(14.dp)),
-                    text = stringResource(R.string.install_select_lkm_file),
-                    onClick = onPickLocalLkm
+        SectionHeader(title = stringResource(R.string.install_lkm_title))
+        if (!isGkiDevice) {
+            NonGkiInstallBlocker(modifier = Modifier.padding(top = 14.dp))
+        } else {
+            RadioOptionCard(
+                modifier = Modifier.padding(top = 14.dp),
+                selected = option == LkmInstallOption.Local,
+                title = stringResource(R.string.home_use_local_lkm_id),
+                subtext = selectedLkmLabel
+                    ?: selectedLkmUriString?.let { stringResource(R.string.install_reading_selected_file) }
+                    ?: stringResource(R.string.install_local_lkm_helper),
+                enabled = true,
+                onClick = { onSelectOption(LkmInstallOption.Local) }
+            )
+            AnimatedVisibility(visible = option == LkmInstallOption.Local) {
+                Column {
+                    GreyActionButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp),
+                        text = stringResource(R.string.install_select_lkm_file),
+                        onClick = onPickLocalLkm
+                    )
+                    if (selectedLkmLabel != null) {
+                        Text(
+                            modifier = Modifier.padding(top = 8.dp),
+                            text = selectedLkmLabel,
+                            color = Color(INSTALL_SECONDARY),
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
+            }
+            RadioOptionCard(
+                modifier = Modifier.padding(top = 10.dp),
+                selected = option == LkmInstallOption.Repository && repositoryOptionAvailable,
+                title = stringResource(R.string.install_repo_lkm_title),
+                subtext = repoLkmInfo?.let {
+                    stringResource(R.string.install_repo_lkm_kmi_module, it.key, it.displayVersion) +
+                            "\n" + stringResource(R.string.install_repo_lkm_source_short)
+                } ?: stringResource(R.string.install_repo_lkm_unavailable),
+                enabled = repositoryOptionAvailable,
+                onClick = { onSelectOption(LkmInstallOption.Repository) }
+            )
+            AnimatedVisibility(visible = isDownloading) {
+                LinearDownloadProgress(
+                    modifier = Modifier.padding(top = 12.dp),
+                    progress = downloadProgress
                 )
             }
-        }
-        RadioOptionCard(
-            modifier = Modifier.padding(top = 10.dp),
-            selected = option == LkmInstallOption.Repository,
-            icon = Icons.Outlined.CloudDownload,
-            title = stringResource(R.string.install_repo_lkm_title),
-            subtext = repoLkmInfo?.let {
-                stringResource(R.string.install_repo_lkm_detected, it.key, it.displayVersion) +
-                        "\n" + stringResource(R.string.install_repo_lkm_source)
-            } ?: stringResource(R.string.install_repo_lkm_not_detected),
-            onClick = { onSelectOption(LkmInstallOption.Repository) }
-        )
-        AnimatedVisibility(visible = isDownloading) {
-            LinearDownloadProgress(
-                modifier = Modifier.padding(top = 12.dp),
-                progress = downloadProgress
-            )
         }
     }
 }
 
 @Composable
 private fun SectionHeader(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color(IOS_BLUE),
-            modifier = Modifier.size(24.dp),
-        )
-        Text(
-            text = title,
-            color = Color.White,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
+    Text(
+        text = title,
+        color = Color.White,
+        fontSize = 17.sp,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
 
 @Composable
 private fun RadioOptionCard(
     modifier: Modifier = Modifier,
     selected: Boolean,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtext: String?,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val borderColor = if (selected) Color(IOS_BLUE) else Color(IOS_SEPARATOR)
+    val borderColor = if (selected) Color.White else Color(INSTALL_BORDER)
     Card(
         modifier = modifier
             .fillMaxWidth()
             .border(1.dp, borderColor, RoundedCornerShape(14.dp)),
-        onClick = onClick,
+        onClick = { if (enabled) onClick() },
         colors = CardDefaults.defaultColors(color = Color.Transparent),
         insideMargin = androidx.compose.foundation.layout.PaddingValues(12.dp),
         cornerRadius = 14.dp,
+        showIndication = enabled,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            if (!subtext.isNullOrBlank()) {
+                Text(
+                    modifier = Modifier.padding(top = 3.dp),
+                    text = subtext,
+                    color = Color(INSTALL_SECONDARY),
+                    fontSize = 12.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NonGkiInstallBlocker(
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.home_non_gki_title),
+            color = Color(INSTALL_RED),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            modifier = Modifier.padding(top = 4.dp),
+            text = stringResource(R.string.home_non_gki_body),
+            color = Color(INSTALL_SECONDARY),
+            fontSize = 13.sp,
+        )
+        Text(
+            modifier = Modifier.padding(top = 4.dp),
+            text = stringResource(R.string.install_non_gki_kernel_reason),
+            color = Color(INSTALL_SECONDARY),
+            fontSize = 13.sp,
+        )
+    }
+}
+
+@Composable
+private fun GreyActionButton(
+    modifier: Modifier = Modifier,
+    text: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = modifier
+            .height(48.dp)
+            .border(1.dp, Color(INSTALL_BORDER), RoundedCornerShape(14.dp)),
+        colors = CardDefaults.defaultColors(color = Color(INSTALL_BUTTON)),
+        cornerRadius = 14.dp,
+        insideMargin = androidx.compose.foundation.layout.PaddingValues(0.dp),
+        onClick = onClick,
         showIndication = true,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Box(
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (selected) Color(IOS_BLUE) else Color(IOS_SECONDARY),
-                modifier = Modifier.size(24.dp),
+            Text(
+                text = text,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                if (!subtext.isNullOrBlank()) {
-                    Text(
-                        modifier = Modifier.padding(top = 3.dp),
-                        text = subtext,
-                        color = Color(IOS_SECONDARY),
-                        fontSize = 12.sp,
-                    )
-                }
-            }
-            if (selected) {
-                Icon(
-                    imageVector = Icons.Outlined.CheckCircle,
-                    contentDescription = null,
-                    tint = Color(IOS_BLUE),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+        }
+    }
+}
+
+@Composable
+private fun InstallActionButton(
+    modifier: Modifier = Modifier,
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = modifier.height(50.dp),
+        colors = CardDefaults.defaultColors(
+            color = if (enabled) Color(INSTALL_CTA_BLUE) else Color(INSTALL_BUTTON)
+        ),
+        cornerRadius = 14.dp,
+        insideMargin = androidx.compose.foundation.layout.PaddingValues(0.dp),
+        onClick = { if (enabled) onClick() },
+        showIndication = enabled,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = text,
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -587,13 +667,13 @@ private fun LinearDownloadProgress(
         modifier = modifier
             .fillMaxWidth()
             .height(4.dp)
-            .background(Color(IOS_SEPARATOR), RoundedCornerShape(2.dp))
+            .background(Color(INSTALL_BORDER), RoundedCornerShape(2.dp))
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth(progress.coerceIn(0f, 1f))
                 .height(4.dp)
-                .background(Color(IOS_BLUE), RoundedCornerShape(2.dp))
+                .background(Color.White, RoundedCornerShape(2.dp))
         )
     }
 }
