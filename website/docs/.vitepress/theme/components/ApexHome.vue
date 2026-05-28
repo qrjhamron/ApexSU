@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { withBase } from 'vitepress'
+</script>
+
 <template>
   <div class="apex-home">
     <section class="apex-hero">
@@ -35,14 +39,6 @@
       </a>
     </section>
 
-    <a class="install-row" href="/guide/installation">
-      <span class="install-row__content">
-        <strong>Installation guide</strong>
-        <small>Check requirements and supported GKI install flow.</small>
-      </span>
-      <span class="install-row__arrow" aria-hidden="true">&gt;</span>
-    </a>
-
     <GitHubRepoCard />
 
     <section class="apex-warning" aria-label="GKI support warning">
@@ -52,6 +48,14 @@
         installation must be blocked.
       </p>
     </section>
+
+    <a class="install-row" :href="withBase('/guide/what-is-apexsu.html')">
+      <span class="install-row__content">
+        <strong>Installation guide</strong>
+        <small>Check requirements and supported GKI install flow.</small>
+      </span>
+      <span class="install-row__arrow" aria-hidden="true">&gt;</span>
+    </a>
 
     <section class="feature-list" aria-label="Feature summary">
       <article class="feature-list__item">
