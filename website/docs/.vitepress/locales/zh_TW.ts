@@ -5,7 +5,7 @@ export default defineConfig({
   description: '一個基於核心，適用於 Android GKI 的 Root 解決方案。',
 
   themeConfig: {
-    logo: '/logo.svg',
+    logo: '/apexsu_logo.svg',
     nav: nav(),
 
     lastUpdatedText: '上次更新',

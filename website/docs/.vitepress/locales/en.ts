@@ -5,7 +5,7 @@ export default defineConfig({
   description: 'Modern root solution for supported Android GKI devices.',
 
   themeConfig: {
-    logo: '/logo.svg',
+    logo: '/apexsu_logo.svg',
     nav: nav(),
     lastUpdatedText: 'Last updated',
     sidebar: {

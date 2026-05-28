@@ -7,7 +7,7 @@ hero:
   text: サポート対象の Android GKI デバイス向けモダン root ソリューション
   tagline: "ApexSU は、サポート対象の Android GKI カーネル向けに、boot image インストール、LKM サポート、モダンなマネージャーを提供します。"
   image:
-    src: /logo.svg
+    src: /apexsu_logo.svg
     alt: ApexSU
   actions:
     - theme: brand

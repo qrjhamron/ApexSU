@@ -7,7 +7,7 @@ hero:
   text: Современное root-решение для поддерживаемых Android GKI устройств
   tagline: "ApexSU предоставляет сфокусированный root-процесс для поддерживаемых Android GKI ядер: установка через boot image, поддержка LKM и современный менеджер."
   image:
-    src: /logo.svg
+    src: /apexsu_logo.svg
     alt: ApexSU
   actions:
     - theme: brand

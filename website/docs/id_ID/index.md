@@ -7,7 +7,7 @@ hero:
   text: Solusi root modern untuk Perangkat GKI Android yang didukung
   tagline: "ApexSU menyediakan alur root yang fokus untuk kernel Android GKI yang didukung."
   image:
-    src: /logo.svg
+    src: /apexsu_logo.svg
     alt: ApexSU
   actions:
     - theme: brand

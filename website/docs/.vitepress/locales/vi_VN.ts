@@ -5,7 +5,7 @@ export default defineConfig({
   description: 'Một giải pháp root trực tiếp trên kernel dành cho các thiết bị hỗ trợ GKI.',
 
   themeConfig: {
-    logo: '/logo.svg',
+    logo: '/apexsu_logo.svg',
     nav: nav(),
 
     lastUpdatedText: 'cập nhật lần cuối',

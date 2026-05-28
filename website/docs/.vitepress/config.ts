@@ -20,7 +20,7 @@ export default defineConfig({
           'Modern root solution for supported Android GKI devices with boot image workflow and LKM support.'
       }
     ],
-    ['meta', { name: 'og:image', content: '/logo.svg' }],
+    ['meta', { name: 'og:image', content: '/apexsu_logo.svg' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }]
   ],
   sitemap: {

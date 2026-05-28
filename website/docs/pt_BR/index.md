@@ -7,7 +7,7 @@ hero:
   text: Solução root moderna para dispositivos Android GKI suportados
   tagline: "O ApexSU oferece um fluxo de root focado para kernels Android GKI suportados, com instalação por boot image, suporte a LKM e um gerenciador Android moderno."
   image:
-    src: /logo.svg
+    src: /apexsu_logo.svg
     alt: ApexSU
   actions:
     - theme: brand

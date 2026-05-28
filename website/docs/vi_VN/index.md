@@ -7,7 +7,7 @@ hero:
   text: Giải pháp root hiện đại cho thiết bị Android GKI được hỗ trợ
   tagline: "ApexSU cung cấp quy trình root tập trung cho kernel Android GKI được hỗ trợ, với cài đặt qua boot image, hỗ trợ LKM và trình quản lý Android hiện đại."
   image:
-    src: /logo.svg
+    src: /apexsu_logo.svg
     alt: ApexSU
   actions:
     - theme: brand

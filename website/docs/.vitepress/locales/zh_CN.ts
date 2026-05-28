@@ -5,7 +5,7 @@ export default defineConfig({
   description: '一个基于内核，为安卓 GKI 准备的 root 方案。',
 
   themeConfig: {
-    logo: '/logo.svg',
+    logo: '/apexsu_logo.svg',
     nav: nav(),
 
     lastUpdatedText: '最后更新',

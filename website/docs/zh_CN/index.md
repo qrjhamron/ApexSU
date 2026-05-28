@@ -7,7 +7,7 @@ hero:
   text: 面向受支持 Android GKI 设备的现代 root 方案
   tagline: "ApexSU 为受支持的 Android GKI 内核提供聚焦的 root 流程，包含 boot image 安装、LKM 支持和现代化管理器。"
   image:
-    src: /logo.svg
+    src: /apexsu_logo.svg
     alt: ApexSU
   actions:
     - theme: brand
